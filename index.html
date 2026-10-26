@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Lift Coach</title>
+<meta name="description" content="Move-up calls, muscle balance and a weekly plan from your Hevy workouts.">
+<meta name="theme-color" content="#16181d" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f6f5f1" media="(prefers-color-scheme: light)">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+:root {
+  --bg: #f6f5f1; --panel: #ffffff; --fg: #1d1f24; --muted: #6b6f78; --line: #e4e2dc;
+  --accent: #2f6f4f; --accent-soft: #e3efe8; --warn: #9a6408; --warn-soft: #f6ecd8;
+  --bad: #b23b2e; --bad-soft: #f6e1de; --bar: #c9c6bd; --plan: #2b5fb4;
+  --radius: 14px;
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #16181d; --panel: #1f2228; --fg: #eceae4; --muted: #9a9ea8; --line: #30343c;
+    --accent: #6fcf97; --accent-soft: #1f3a2b; --warn: #e6b45a; --warn-soft: #3b3020;
+    --bad: #f08b7f; --bad-soft: #3d2422; --bar: #4a4e57; --plan: #7aa7f5;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #16181d; --panel: #1f2228; --fg: #eceae4; --muted: #9a9ea8; --line: #30343c;
+  --accent: #6fcf97; --accent-soft: #1f3a2b; --warn: #e6b45a; --warn-soft: #3b3020;
+  --bad: #f08b7f; --bad-soft: #3d2422; --bar: #4a4e57; --plan: #7aa7f5;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--font); -webkit-tap-highlight-color: transparent; }
+body { padding-bottom: calc(72px + env(safe-area-inset-bottom)); }
+button { font: inherit; color: inherit; }
+.wrap { max-width: 640px; margin: 0 auto; padding: 0 16px; }
+header.top { position: sticky; top: 0; z-index: 5; background: var(--bg); padding: calc(12px + env(safe-area-inset-top)) 0 10px; border-bottom: 1px solid var(--line); }
+header.top .wrap { display: flex; align-items: center; gap: 12px; }
+header.top h1 { font-size: 1.15rem; margin: 0; letter-spacing: -.01em; }
+header.top .sub { font-size: .78rem; color: var(--muted); }
+header.top .grow { flex: 1; min-width: 0; }
+.btn { border: 1px solid var(--line); background: var(--panel); border-radius: 999px; padding: 8px 14px; font-size: .85rem; cursor: pointer; white-space: nowrap; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--bg); font-weight: 600; }
+main { padding: 16px 0 24px; }
+h2 { font-size: 1.05rem; margin: 20px 0 4px; }
+h2:first-child { margin-top: 0; }
+.note { color: var(--muted); font-size: .82rem; margin: 0 0 12px; line-height: 1.4; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; margin-bottom: 10px; }
+.row { display: flex; align-items: baseline; gap: 10px; }
+.row .grow { flex: 1; min-width: 0; }
+.ex { font-weight: 600; font-size: .95rem; }
+.kg { font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }
+.kg .arrow { color: var(--accent); margin: 0 4px; }
+.small { font-size: .8rem; color: var(--muted); line-height: 1.4; margin-top: 4px; }
+.mono { font-variant-numeric: tabular-nums; }
+.pill { display: inline-block; font-size: .72rem; font-weight: 600; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+.pill.ready { background: var(--accent-soft); color: var(--accent); }
+.pill.almost { background: var(--warn-soft); color: var(--warn); }
+.pill.building { background: var(--bg); color: var(--muted); border: 1px solid var(--line); }
+.pill.new { background: var(--warn-soft); color: var(--warn); }
+.tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 6px; }
+.tile .big { font-size: 1.9rem; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.tile .lbl { font-size: .78rem; color: var(--muted); }
+.chips { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 6px; margin-bottom: 8px; scrollbar-width: none; }
+.chips button { border: 1px solid var(--line); background: var(--panel); border-radius: 999px; padding: 6px 12px; font-size: .82rem; cursor: pointer; white-space: nowrap; }
+.chips button[aria-pressed="true"] { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+.lift { cursor: pointer; }
+.lift .detail { display: none; margin-top: 10px; border-top: 1px solid var(--line); padding-top: 10px; }
+.lift.open .detail { display: block; }
+.spark { width: 100%; height: 90px; display: block; }
+.bal-row { display: grid; grid-template-columns: 6.2rem 1fr 2.6rem; align-items: center; gap: 8px; padding: 7px 0; }
+.bal-row .name { font-size: .85rem; }
+.bal-row .val { font-size: .82rem; text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); }
+.track { position: relative; height: 16px; }
+.track .bar { position: absolute; left: 0; top: 2px; height: 12px; border-radius: 6px; background: var(--bar); }
+.track .bar.under { background: var(--bad); }
+.track .tgt { position: absolute; top: -3px; width: 2px; height: 22px; background: var(--fg); opacity: .7; border-radius: 1px; }
+.track .pl { position: absolute; top: 1px; width: 14px; height: 14px; margin-left: -7px; border-radius: 50%; border: 2.5px solid var(--plan); background: var(--panel); }
+.legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: .75rem; color: var(--muted); margin: 4px 0 6px; }
+.sw { display: inline-block; width: 12px; height: 8px; border-radius: 3px; margin-right: 5px; vertical-align: 0; }
+table.plan { width: 100%; border-collapse: collapse; font-size: .85rem; }
+table.plan td { padding: 7px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+table.plan tr:last-child td { border-bottom: 0; }
+table.plan td.r { text-align: right; white-space: nowrap; padding-left: 8px; font-variant-numeric: tabular-nums; }
+.pl-item { display: flex; gap: 12px; align-items: flex-start; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: .9rem; }
+.pl-item:last-child { border-bottom: 0; }
+.pl-item .grow { flex: 1; min-width: 0; }
+.pl-item .kg { text-align: right; max-width: 45%; }
+.dayhead { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
+.dayhead b { font-size: .98rem; }
+.next-item { padding: 10px 0; border-bottom: 1px solid var(--line); }
+.next-item:last-child { border-bottom: 0; }
+.big-target { font-size: 1.1rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+nav.tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 6; background: var(--panel); border-top: 1px solid var(--line); padding-bottom: env(safe-area-inset-bottom); }
+nav.tabs .wrap { display: grid; grid-template-columns: repeat(4, 1fr); padding: 0; }
+nav.tabs button { background: none; border: 0; padding: 10px 0 12px; font-size: .74rem; color: var(--muted); display: flex; flex-direction: column; align-items: center; gap: 3px; cursor: pointer; }
+nav.tabs button svg { width: 22px; height: 22px; }
+nav.tabs button[aria-selected="true"] { color: var(--accent); font-weight: 600; }
+.empty { text-align: center; padding: 40px 8px; }
+.empty h2 { font-size: 1.3rem; margin-bottom: 8px; }
+.empty ol { text-align: left; display: inline-block; margin: 8px 0 20px; padding-left: 20px; line-height: 1.6; font-size: .9rem; }
+.toast { position: fixed; left: 50%; bottom: calc(84px + env(safe-area-inset-bottom)); transform: translateX(-50%); background: var(--fg); color: var(--bg); padding: 10px 16px; border-radius: 999px; font-size: .85rem; opacity: 0; transition: opacity .25s; pointer-events: none; z-index: 10; max-width: calc(100% - 32px); }
+.toast.show { opacity: 1; }
+ul.rules { margin: 0; padding-left: 18px; font-size: .85rem; line-height: 1.5; }
+ul.rules li { margin-bottom: 6px; }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<header class="top"><div class="wrap">
+  <div class="grow"><h1>Lift Coach</h1><div class="sub" id="sub">No workouts imported yet</div></div>
+  <button class="btn" id="importBtn" type="button">Import CSV</button>
+  <input type="file" id="file" accept=".csv,text/csv,text/comma-separated-values,text/plain" hidden>
+</div></header>
+
+<main class="wrap" id="main"></main>
+
+<nav class="tabs" id="tabs" hidden><div class="wrap" role="tablist">
+  <button type="button" role="tab" data-tab="next" aria-selected="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 7v10M18 7v10M3 10v4M21 10v4M6 12h12"/></svg>Next</button>
+  <button type="button" role="tab" data-tab="lifts" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19l5-6 4 3 7-9"/><path d="M15 7h5v5"/></svg>Lifts</button>
+  <button type="button" role="tab" data-tab="balance" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h10M4 12h16M4 18h7"/></svg>Balance</button>
+  <button type="button" role="tab" data-tab="plan" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>Plan</button>
+</div></nav>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script src="app.js"></script>
+</body>
+</html>
