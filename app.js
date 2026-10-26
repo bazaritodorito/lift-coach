@@ -220,7 +220,7 @@ function analyse(text) {
     const n = sessions.length;
     const stalled = sameRun >= 5 && Math.max(...sessions.slice(n - 3).map(mean)) <= mean(sessions[n - 4]);
     if (status !== 'ready' && stalled) note += ` No progress for ${sameRun} sessions: do it first in the workout, or drop 10% and build back up.`;
-    lifts.push({ ex, muscle: Object.entries(EX[ex][3]).sort((a, b) => b[1] - a[1])[0][0], lo, hi, inc, status, current: last.top, next, note,
+    lifts.push({ ex, muscle: Object.entries(EX[ex][3]).sort((a, b) => b[1] - a[1])[0][0], lo, hi, inc, status, current: last.top, next, note, shortBy, stalled: status !== 'ready' && stalled, single: status === 'building' && reps.length === 1 && sessions.length > 1,
       last, active, sessions, history: sessions.map(s => [s.day, s.top]) });
   }
   const order = { ready: 0, almost: 1, building: 2 };
@@ -249,6 +249,40 @@ function nextSession() {
   return { p: PLAN[0], k: 0 };
 }
 
+/* One badge per lift: what to do, in two or three words. */
+function badge(l) {
+  if (l.status === 'ready') return `<span class="badge up">↑ ${fmt(l.next)} kg</span>`;
+  if (l.stalled) return `<span class="badge stall">Stalled</span>`;
+  if (l.single) return `<span class="badge neutral">New weight</span>`;
+  return `<span class="badge ${l.status === 'almost' ? 'close' : 'neutral'}">${l.shortBy} rep${l.shortBy === 1 ? '' : 's'} to go</span>`;
+}
+
+/* Sets grid: set numbers across the top, weight and reps aligned underneath.
+   Reps: green = hit the rep target, red = missed it, grey = lighter set below the working weight. */
+function setGrid(l, label) {
+  const sets = l.last.sets;
+  const cols = Math.max(3, sets.length);
+  let h = `<div class="sets-head"><span>${esc(label)}</span><span>target ${l.hi}</span></div>
+    <div class="sets" style="grid-template-columns: 2.4rem repeat(${cols}, minmax(0, 1fr))">
+    <span class="lab"></span>`;
+  for (let i = 0; i < cols; i++) h += `<span class="hd">${i < sets.length ? i + 1 : ''}</span>`;
+  h += '<span class="lab">kg</span>';
+  for (let i = 0; i < cols; i++) h += `<span class="w">${i < sets.length ? fmt(sets[i][0]) : ''}</span>`;
+  h += '<span class="lab">reps</span>';
+  for (let i = 0; i < cols; i++) {
+    if (i >= sets.length) { h += '<span></span>'; continue; }
+    const [w, r] = sets[i];
+    const cls = w < l.current ? 'ramp' : r >= l.hi ? 'hit' : 'miss';
+    const lab = cls === 'ramp' ? 'lighter set' : cls === 'hit' ? 'hit target' : 'missed target';
+    h += `<span class="rep ${cls}" aria-label="${r} reps, ${lab}">${r}</span>`;
+  }
+  return h + '</div>';
+}
+
+function legend() {
+  return `<div class="key"><span><i class="dot hit"></i>Hit target</span><span><i class="dot miss"></i>Missed</span><span><i class="dot ramp"></i>Lighter set</span></div>`;
+}
+
 function renderNext() {
   const { p, k } = nextSession();
   const when = k === 0 ? 'Today' : k === 1 ? 'Tomorrow' : DAYNAME[p.day];
@@ -258,22 +292,13 @@ function renderNext() {
     <div class="card tile"><div class="big">${ready.length}</div><div class="lbl">lifts ready to move up</div></div>
     <div class="card tile"><div class="big">${under.length}</div><div class="lbl">muscle groups under target</div></div>
   </div>`;
-  h += `<h2>${when} · ${esc(p.session)}</h2><p class="note">${p.items.reduce((a, i) => a + i[1], 0)} working sets. Weights include any move-ups.</p><div class="card">`;
+  h += `<div class="sec-head"><h2>${when} · ${esc(p.session)}</h2><span class="small">${p.items.reduce((a, i) => a + i[1], 0)} sets</span></div>${legend()}`;
   for (const [ex, n, reps, tag, fb] of p.items) {
     const w = weightFor(ex, fb); const l = w.lift;
-    const up = l && l.active && l.status === 'ready';
-    const lastTxt = l ? `Last (${shortDate(l.last.day)}): ${l.last.sets.map(s => `${fmt(s[0])}×${s[1]}`).join(', ')}` : '';
-    h += `<div class="next-item"><div class="row"><div class="grow"><div class="ex">${esc(ex)}</div></div>
-      ${up ? '<span class="pill ready">↑ Move up</span>' : tag ? `<span class="pill new">${esc(tag)}</span>` : ''}</div>
-      <div class="row" style="margin-top:4px"><div class="grow big-target">${esc(w.text)}</div><div class="mono small" style="margin:0">${n} × ${esc(reps)}</div></div>
-      ${lastTxt ? `<div class="small">${esc(lastTxt)}</div>` : ''}
-      ${up ? `<div class="small">${esc(l.note)}</div>` : ''}</div>`;
-  }
-  h += '</div>';
-  if (ready.length) {
-    h += '<h2>Ready to move up</h2><p class="note">Every working set hit the top of the rep range.</p>';
-    for (const l of ready) h += `<div class="card"><div class="row"><div class="grow ex">${esc(l.ex)}</div>
-      <div class="kg">${fmt(l.current)}<span class="arrow">→</span>${fmt(l.next)} kg</div></div><div class="small">${esc(l.note)}</div></div>`;
+    const goal = l ? (l.status === 'ready' ? `${l.lo}–${l.hi}` : `${l.hi}`) : reps;
+    h += `<div class="card xc"><div class="xc-top"><div class="ex">${esc(ex)}</div>${l && l.active ? badge(l) : tag ? `<span class="badge neutral">${esc(tag)}</span>` : ''}</div>
+      <div class="today"><span class="today-kg">${esc(w.text)}</span><span class="today-x">${n} × ${esc(goal)}</span></div>
+      ${l ? setGrid(l, `Last · ${shortDate(l.last.day)}`) : ''}</div>`;
   }
   return h;
 }
@@ -285,39 +310,33 @@ function spark(hist) {
   const y1 = Math.max(...ys) * 1.1, y0 = 0;
   const X = v => m.l + (x1 === x0 ? (W - m.l - m.r) / 2 : (v - x0) / (x1 - x0) * (W - m.l - m.r));
   const Y = v => H - m.b - (v - y0) / (y1 - y0) * (H - m.t - m.b);
-  const pts = hist.map((h, i) => `${X(xs[i]).toFixed(1)},${Y(ys[i]).toFixed(1)}`);
+  const pts = hist.map((h, i) => [X(xs[i]), Y(ys[i])]);
   const last = hist[hist.length - 1];
-  return `<svg class="spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Heaviest set per session">
-    <line x1="${m.l}" x2="${W - m.r}" y1="${Y(y1 / 1.1)}" y2="${Y(y1 / 1.1)}" stroke="var(--line)"/>
+  return `<svg class="spark" viewBox="0 0 ${W} ${H}" role="img" aria-label="Heaviest set per session">
     <line x1="${m.l}" x2="${W - m.r}" y1="${H - m.b}" y2="${H - m.b}" stroke="var(--line)"/>
-    <text x="${m.l - 4}" y="${Y(y1 / 1.1) + 3}" text-anchor="end" font-size="9" fill="var(--muted)">${fmt(y1 / 1.1)}</text>
-    <text x="${m.l - 4}" y="${H - m.b + 3}" text-anchor="end" font-size="9" fill="var(--muted)">0</text>
-    <text x="${m.l}" y="${H - 4}" font-size="9" fill="var(--muted)">${esc(shortDate(hist[0][0]))}</text>
-    <text x="${W - m.r}" y="${H - 4}" text-anchor="end" font-size="9" fill="var(--muted)">${esc(shortDate(last[0]))}</text>
-    <polyline points="${pts.join(' ')}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-    ${pts.map(p => `<circle cx="${p.split(',')[0]}" cy="${p.split(',')[1]}" r="2.5" fill="var(--accent)"/>`).join('')}
-    <text x="${X(xs[xs.length - 1]) + 5}" y="${Y(ys[ys.length - 1]) + 3}" font-size="10" fill="var(--fg)">${fmt(last[1])}</text>
+    <text x="${m.l}" y="${H - 4}" font-size="10" fill="var(--muted)">${esc(shortDate(hist[0][0]))}</text>
+    <text x="${W - m.r}" y="${H - 4}" text-anchor="end" font-size="10" fill="var(--muted)">${esc(shortDate(last[0]))}</text>
+    <polyline points="${pts.map(p => p.map(v => v.toFixed(1)).join(',')).join(' ')}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+    ${pts.map(p => `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="3" fill="var(--accent)"/>`).join('')}
+    <text x="${(pts[pts.length - 1][0] + 6).toFixed(1)}" y="${(pts[pts.length - 1][1] + 4).toFixed(1)}" font-size="11" fill="var(--fg)">${fmt(last[1])}</text>
+    <text x="${(pts[0][0] - 6).toFixed(1)}" y="${(pts[0][1] + 4).toFixed(1)}" text-anchor="end" font-size="11" fill="var(--muted)">${fmt(hist[0][1])}</text>
   </svg>`;
 }
 
 function renderLifts() {
   const list = A.lifts.filter(l => l.active && (liftFilter === 'all' || l.status === liftFilter));
-  let h = `<h2>Your lifts</h2><p class="note">Everything you've done in the last 4 weeks. Tap one for its history.</p><div class="chips" role="group" aria-label="Filter">`;
+  let h = `<div class="chips" role="group" aria-label="Filter">`;
   for (const [k, lab] of [['all', 'All'], ['ready', 'Move up'], ['almost', 'Almost'], ['building', 'Building']])
     h += `<button type="button" data-filter="${k}" aria-pressed="${liftFilter === k}">${lab}</button>`;
-  h += '</div>';
+  h += `</div>${legend()}`;
   if (!list.length) h += '<p class="note">Nothing here.</p>';
   for (const l of list) {
-    h += `<div class="card lift${openLift === l.ex ? ' open' : ''}" data-lift="${esc(l.ex)}">
-      <div class="row"><div class="grow ex">${esc(l.ex)}</div><span class="pill ${l.status}">${STATUS[l.status]}</span></div>
-      <div class="row" style="margin-top:4px"><div class="grow small" style="margin:0">${esc(l.muscle)} · ${l.lo}–${l.hi} reps</div>
-      <div class="kg">${l.status === 'ready' ? `${fmt(l.current)}<span class="arrow">→</span>${fmt(l.next)}` : fmt(l.current)} kg</div></div>
-      <div class="small">${esc(l.note)}</div>
-      <div class="detail">
-        <div class="small" style="margin-top:0">Last session (${esc(shortDate(l.last.day))}): <span class="mono">${esc(l.last.sets.map(s => `${fmt(s[0])}×${s[1]}`).join(', '))}</span></div>
-        ${l.history.length > 1 ? spark(l.history) : ''}
-        <div class="small">Heaviest set per session. Steps up by ${fmt(l.inc)} kg.</div>
-      </div></div>`;
+    h += `<div class="card xc lift${openLift === l.ex ? ' open' : ''}" data-lift="${esc(l.ex)}">
+      <div class="xc-top"><div class="ex">${esc(l.ex)}</div>${badge(l)}</div>
+      <div class="today"><span class="today-kg">${fmt(l.current)} kg</span><span class="today-x">${esc(l.muscle)} · ${l.lo}–${l.hi} reps</span></div>
+      ${setGrid(l, `Last · ${shortDate(l.last.day)}`)}
+      <div class="detail">${l.history.length > 1 ? spark(l.history) : ''}<div class="small">${esc(l.note)}</div></div>
+      <div class="more" aria-hidden="true">${openLift === l.ex ? 'Less' : 'History'}</div></div>`;
   }
   return h;
 }

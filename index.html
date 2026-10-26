@@ -59,6 +59,31 @@ h2:first-child { margin-top: 0; }
 .pill.almost { background: var(--warn-soft); color: var(--warn); }
 .pill.building { background: var(--bg); color: var(--muted); border: 1px solid var(--line); }
 .pill.new { background: var(--warn-soft); color: var(--warn); }
+.sec-head { display: flex; justify-content: space-between; align-items: baseline; margin: 20px 0 6px; }
+.sec-head h2 { margin: 0; }
+.key { display: flex; gap: 14px; font-size: .75rem; color: var(--muted); margin: 0 0 10px; }
+.key .dot { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+.dot.hit, .rep.hit { background: var(--accent-soft); color: var(--accent); }
+.dot.miss, .rep.miss { background: var(--bad-soft); color: var(--bad); }
+.dot.ramp { background: var(--bg); border: 1px solid var(--line); }
+.xc-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.xc-top .ex { line-height: 1.3; }
+.badge { flex: none; font-size: .75rem; font-weight: 700; padding: 4px 10px; border-radius: 999px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.badge.up { background: var(--accent); color: var(--panel); }
+.badge.close { background: var(--warn-soft); color: var(--warn); }
+.badge.neutral { background: var(--bg); color: var(--muted); border: 1px solid var(--line); }
+.badge.stall { background: var(--bad-soft); color: var(--bad); }
+.today { display: flex; align-items: baseline; gap: 10px; margin: 6px 0 10px; }
+.today-kg { font-size: 1.5rem; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+.today-x { font-size: .85rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.sets-head { display: flex; justify-content: space-between; font-size: .72rem; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 4px; }
+.sets { display: grid; gap: 5px 6px; align-items: center; text-align: center; font-variant-numeric: tabular-nums; }
+.sets .lab { text-align: left; font-size: .72rem; color: var(--muted); }
+.sets .hd { font-size: .72rem; color: var(--muted); }
+.sets .w { font-size: .88rem; }
+.rep { display: block; border-radius: 8px; padding: 5px 0; font-weight: 700; font-size: .95rem; }
+.rep.ramp { background: var(--bg); color: var(--muted); border: 1px solid var(--line); padding: 4px 0; }
+.lift .more { font-size: .75rem; color: var(--muted); text-align: center; margin-top: 8px; }
 .tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 6px; }
 .tile .big { font-size: 1.9rem; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.1; }
 .tile .lbl { font-size: .78rem; color: var(--muted); }

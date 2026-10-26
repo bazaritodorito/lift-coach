@@ -1,4 +1,4 @@
-const VERSION = 'lift-coach-v1';
+const VERSION = 'lift-coach-v2';
 const SHELL = ['./', 'index.html', 'app.js', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png'];
 
 self.addEventListener('install', e => {
