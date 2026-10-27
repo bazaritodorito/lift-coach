@@ -93,6 +93,10 @@ const store = {
   get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
   set(k, v) { try { localStorage.setItem(k, v); return true; } catch (e) { return false; } },
 };
+let S = { style: 'rep', next: 'rotation', units: 'kg' };
+try { Object.assign(S, JSON.parse(store.get('lc_settings') || '{}')); } catch (e) { /* defaults */ }
+const wv = kg => S.units === 'lb' ? Math.round(kg * 2.20462 * 2) / 2 : kg;
+const W = kg => `${fmt(wv(kg))} ${S.units}`;
 function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove('show'), 2600); }
 
 function parseCSV(text) {
@@ -129,7 +133,7 @@ function analyse(text) {
   if (rows.length < 2) throw new Error('That file has no rows.');
   const head = rows[0].map(h => h.trim().toLowerCase());
   const col = n => head.indexOf(n);
-  const iEx = col('exercise_title'), iStart = col('start_time'), iType = col('set_type'), iReps = col('reps'), iIdx = col('set_index');
+  const iEx = col('exercise_title'), iStart = col('start_time'), iType = col('set_type'), iReps = col('reps'), iIdx = col('set_index'), iTitle = col('title');
   let iKg = col('weight_kg'), lbs = false;
   if (iKg < 0 && col('weight_lbs') >= 0) { iKg = col('weight_lbs'); lbs = true; }
   if (iEx < 0 || iStart < 0) throw new Error("This doesn't look like a Hevy workouts export.");
@@ -142,7 +146,7 @@ function analyse(text) {
     if (w != null && lbs) w = w * 0.45359237;
     if (w != null && isNaN(w)) w = null;
     const reps = r[iReps] === '' || r[iReps] == null ? null : parseInt(r[iReps], 10);
-    sets.push({ dt, day: dayKey(dt), ex: (r[iEx] || '').trim(), type, w, reps: isNaN(reps) ? null : reps, idx: iIdx >= 0 ? +r[iIdx] || 0 : 0 });
+    sets.push({ title: iTitle >= 0 ? (r[iTitle] || '').trim() : '', dt, day: dayKey(dt), ex: (r[iEx] || '').trim(), type, w, reps: isNaN(reps) ? null : reps, idx: iIdx >= 0 ? +r[iIdx] || 0 : 0 });
   }
   if (!sets.length) throw new Error('No sets could be read from that file.');
   const latest = new Date(Math.max(...sets.map(s => s.dt)));
@@ -225,20 +229,20 @@ function analyse(text) {
     });
     if (reps.length >= 2 && Math.min(...reps) >= hi) {
       status = 'ready'; next = Math.round((last.top + inc) * 10) / 10;
-      note = `Every set at ${fmt(last.top)} kg hit ${hi}+ reps. Go to ${fmt(next)} kg.`;
+      note = `Every set at ${W(last.top)} hit ${hi}+ reps. Go to ${W(next)}.`;
     } else if (prior) {
       status = 'ready'; next = prior.top;
       const rr = prior.repsAtTop; const repTxt = rr.length > 1 ? rr.slice(0, -1).join(', ') + ' and ' + rr[rr.length - 1] : rr[0];
-      note = `You did ${fmt(prior.top)} kg for ${repTxt} reps on ${shortDate(prior.day)}. Go back to ${fmt(prior.top)} kg.`;
+      note = `You did ${W(prior.top)} for ${repTxt} reps on ${shortDate(prior.day)}. Go back to ${W(prior.top)}.`;
     } else if (reps.length === 1 && sessions.length > 1) {
       status = 'building';
-      note = `Only 1 set at ${fmt(last.top)} kg so far. Do all your sets there, then build to ${hi} reps.`;
+      note = `Only 1 set at ${W(last.top)} so far. Do all your sets there, then build to ${hi} reps.`;
     } else if (reps.filter(r => r >= hi).length >= Math.max(1, reps.length / 2) || (reps.length >= 2 && reps.reduce((a, b) => a + b, 0) / reps.length >= hi - 1.5)) {
       status = 'almost';
-      note = `${shortBy} more rep${shortBy === 1 ? '' : 's'} to hit ${hi} on every set at ${fmt(last.top)} kg.`;
+      note = `${shortBy} more rep${shortBy === 1 ? '' : 's'} to hit ${hi} on every set at ${W(last.top)}.`;
     } else {
       status = 'building';
-      note = `${shortBy} more reps to hit ${hi} on every set at ${fmt(last.top)} kg.`;
+      note = `${shortBy} more reps to hit ${hi} on every set at ${W(last.top)}.`;
     }
     // Stall check: same top weight 5+ sessions in a row, and the last 3 sessions no better than the one before them.
     const sameRun = (() => { let n = 0; for (let i = sessions.length - 1; i >= 0 && sessions[i].top === last.top; i--) n++; return n; })();
@@ -253,7 +257,10 @@ function analyse(text) {
   lifts.sort((a, b) => order[a.status] - order[b.status] || a.ex.localeCompare(b.ex));
   moves.sort((a, b) => b.day.localeCompare(a.day) || a.ex.localeCompare(b.ex));
   const progress = { weeks: W12, vol: vol12, sessions: ses12.map(x => x.size), musSessions: Object.fromEntries(GROUPS.map(g => [g, mses12[g].map(x => x.size)])), moves };
-  return { latest, workouts, blockWorkouts, weeks, balance, lifts, progress, uncounted: [...uncounted] };
+  const byW = new Map();
+  for (const s of sets) { if (!byW.has(+s.dt)) byW.set(+s.dt, { dt: s.dt, title: s.title, exs: new Set() }); byW.get(+s.dt).exs.add(s.ex); }
+  const recent = [...byW.values()].sort((a, b) => b.dt - a.dt).slice(0, 12);
+  return { latest, workouts, blockWorkouts, weeks, balance, lifts, progress, recent, uncounted: [...uncounted] };
 }
 
 /* ---------- Rendering ---------- */
@@ -262,24 +269,34 @@ const STATUS = { ready: 'Move up', almost: 'Almost', building: 'Building' };
 
 function weightFor(ex, fallback) {
   const l = A.lifts.find(x => x.ex === ex);
-  if (l && l.active) return { text: `${fmt(l.status === 'ready' ? l.next : l.current)} kg`, lift: l };
-  if (l) return { text: `${fmt(l.current)} kg`, lift: l };
+  if (l && l.active && usesPrilepin(l)) return { text: W(prilepin(l).next), lift: l };
+  if (l && l.active) return { text: `${W(l.status === 'ready' ? l.next : l.current)}`, lift: l };
+  if (l) return { text: `${W(l.current)}`, lift: l };
   return { text: fallback || '—', lift: null };
 }
 
 function nextSession() {
+  if (S.next === 'rotation') {
+    for (const w of A.recent) {
+      const i = PLAN.findIndex(p => p.session.toLowerCase() === w.title.toLowerCase() ||
+        p.items.filter(it => w.exs.has(it[0])).length >= Math.ceil(p.items.length * 0.6));
+      if (i >= 0) return { p: PLAN[(i + 1) % PLAN.length], when: 'Next session' };
+    }
+    return { p: PLAN[0], when: 'Next session' };
+  }
   const now = new Date(); const today = now.getDay();
   const trainedToday = dayKey(A.latest) === dayKey(now);
   for (let k = trainedToday ? 1 : 0; k < 8; k++) {
     const d = (today + k) % 7; const p = PLAN.find(x => x.day === d);
-    if (p) return { p, k };
+    if (p) return { p, when: k === 0 ? 'Today' : k === 1 ? 'Tomorrow' : DAYNAME[p.day] };
   }
-  return { p: PLAN[0], k: 0 };
+  return { p: PLAN[0], when: 'Next session' };
 }
+const isUp = l => l.active && (usesPrilepin(l) ? prilepin(l).next > l.current : l.status === 'ready');
 
 /* One badge per lift: what to do, in two or three words. */
 function badge(l) {
-  if (l.status === 'ready') return `<span class="badge up">↑ ${fmt(l.next)} kg</span>`;
+  if (l.status === 'ready') return `<span class="badge up">↑ ${W(l.next)}</span>`;
   if (l.stalled) return `<span class="badge stall">Stalled</span>`;
   if (l.single) return `<span class="badge neutral">New weight</span>`;
   return `<span class="badge ${l.status === 'almost' ? 'close' : 'neutral'}">${l.shortBy} rep${l.shortBy === 1 ? '' : 's'} to go</span>`;
@@ -294,8 +311,8 @@ function setGrid(l, label) {
     <div class="sets" style="grid-template-columns: 2.4rem repeat(${cols}, minmax(0, 1fr))">
     <span class="lab"></span>`;
   for (let i = 0; i < cols; i++) h += `<span class="hd">${i < sets.length ? i + 1 : ''}</span>`;
-  h += '<span class="lab">kg</span>';
-  for (let i = 0; i < cols; i++) h += `<span class="w">${i < sets.length ? fmt(sets[i][0]) : ''}</span>`;
+  h += `<span class="lab">${S.units}</span>`;
+  for (let i = 0; i < cols; i++) h += `<span class="w">${i < sets.length ? fmt(wv(sets[i][0])) : ''}</span>`;
   h += '<span class="lab">reps</span>';
   for (let i = 0; i < cols; i++) {
     if (i >= sets.length) { h += '<span></span>'; continue; }
@@ -312,17 +329,18 @@ function legend() {
 }
 
 function renderNext() {
-  const { p, k } = nextSession();
-  const when = k === 0 ? 'Today' : k === 1 ? 'Tomorrow' : DAYNAME[p.day];
-  const ready = A.lifts.filter(l => l.active && l.status === 'ready');
+  const { p, when } = nextSession();
+  const ready = A.lifts.filter(isUp);
   const under = A.balance.filter(b => b.avg < b.target);
   let h = `<div class="tiles">
     <div class="card tile"><div class="big">${ready.length}</div><div class="lbl">lifts ready to move up</div></div>
     <div class="card tile"><div class="big">${under.length}</div><div class="lbl">muscle groups under target</div></div>
   </div>`;
   h += `<div class="sec-head"><h2>${when} · ${esc(p.session)}</h2><span class="small">${p.items.reduce((a, i) => a + i[1], 0)} sets</span></div>${legend()}`;
+  if (p.items.some(it => { const l = A.lifts.find(x => x.ex === it[0]); return l && l.active && usesPrilepin(l); })) h += pLegend();
   for (const [ex, n, reps, tag, fb] of p.items) {
     const w = weightFor(ex, fb); const l = w.lift;
+    if (l && l.active && usesPrilepin(l)) { h += pTile(l); continue; }
     const goal = l ? (l.status === 'ready' ? `${l.lo}–${l.hi}` : `${l.hi}`) : reps;
     h += `<div class="card xc"><div class="xc-top"><div class="ex">${esc(ex)}</div>${l && l.active ? badge(l) : tag ? `<span class="badge neutral">${esc(tag)}</span>` : ''}</div>
       <div class="today"><span class="today-kg">${esc(w.text)}</span><span class="today-x">${n} × ${esc(goal)}</span></div>
@@ -346,8 +364,8 @@ function spark(hist) {
     <text x="${W - m.r}" y="${H - 4}" text-anchor="end" font-size="10" fill="var(--muted)">${esc(shortDate(last[0]))}</text>
     <polyline points="${pts.map(p => p.map(v => v.toFixed(1)).join(',')).join(' ')}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
     ${pts.map(p => `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="3" fill="var(--accent)"/>`).join('')}
-    <text x="${(pts[pts.length - 1][0] + 6).toFixed(1)}" y="${(pts[pts.length - 1][1] + 4).toFixed(1)}" font-size="11" fill="var(--fg)">${fmt(last[1])}</text>
-    <text x="${(pts[0][0] - 6).toFixed(1)}" y="${(pts[0][1] + 4).toFixed(1)}" text-anchor="end" font-size="11" fill="var(--muted)">${fmt(hist[0][1])}</text>
+    <text x="${(pts[pts.length - 1][0] + 6).toFixed(1)}" y="${(pts[pts.length - 1][1] + 4).toFixed(1)}" font-size="11" fill="var(--fg)">${fmt(wv(last[1]))}</text>
+    <text x="${(pts[0][0] - 6).toFixed(1)}" y="${(pts[0][1] + 4).toFixed(1)}" text-anchor="end" font-size="11" fill="var(--muted)">${fmt(wv(hist[0][1]))}</text>
   </svg>`;
 }
 
@@ -358,10 +376,12 @@ function renderLifts() {
     h += `<button type="button" data-filter="${k}" aria-pressed="${liftFilter === k}">${lab}</button>`;
   h += `</div>${legend()}`;
   if (!list.length) h += '<p class="note">Nothing here.</p>';
+  if (list.some(usesPrilepin)) h += pLegend();
   for (const l of list) {
+    if (usesPrilepin(l)) { h += pTile(l, { expandable: true }); continue; }
     h += `<div class="card xc lift${openLift === l.ex ? ' open' : ''}" data-lift="${esc(l.ex)}">
       <div class="xc-top"><div class="ex">${esc(l.ex)}</div>${badge(l)}</div>
-      <div class="today"><span class="today-kg">${fmt(l.current)} kg</span><span class="today-x">${esc(l.muscle)} · ${l.lo}–${l.hi} reps</span></div>
+      <div class="today"><span class="today-kg">${W(l.current)}</span><span class="today-x">${esc(l.muscle)} · ${l.lo}–${l.hi} reps</span></div>
       ${setGrid(l, `Last · ${shortDate(l.last.day)}`)}
       <div class="detail">${l.history.length > 1 ? spark(l.history) : ''}<div class="small">${esc(l.note)}</div></div>
       <div class="more" aria-hidden="true">${openLift === l.ex ? 'Less' : 'History'}</div></div>`;
@@ -391,11 +411,12 @@ function renderBalance() {
 }
 
 function renderPlan() {
-  let h = `<h2>Your balanced week</h2><p class="note">Upper / lower, each muscle twice a week. Weights update every time you import.</p>`;
+  let h = `<h2>Your balanced week</h2><p class="note">Upper / lower, each muscle twice a week${S.next === 'rotation' ? ', done in order' : ''}. Weights update every time you import.</p>`;
   for (const d of PLAN) {
-    h += `<div class="card"><div class="dayhead"><b>${DAYNAME[d.day]} · ${esc(d.session)}</b><span class="small" style="margin:0">${d.items.reduce((a, i) => a + i[1], 0)} sets</span></div>`;
+    const isNext = nextSession().p === d;
+    h += `<div class="card"><div class="dayhead"><b>${S.next === 'rotation' ? '' : `${DAYNAME[d.day]} · `}${esc(d.session)}${isNext ? ' <span class="pill ready">Next</span>' : ''}</b><span class="small" style="margin:0">${d.items.reduce((a, i) => a + i[1], 0)} sets</span></div>`;
     for (const [ex, n, reps, tag, fb] of d.items) {
-      const w = weightFor(ex, fb); const up = w.lift && w.lift.active && w.lift.status === 'ready';
+      const w = weightFor(ex, fb); const up = w.lift && isUp(w.lift);
       h += `<div class="pl-item"><div class="grow"><div>${esc(ex)}</div>
         <div class="small" style="margin-top:2px">${n} × ${esc(reps)}${up ? ' <span class="pill ready">↑ Move up</span>' : tag ? ` <span class="pill new">${esc(tag)}</span>` : ''}</div></div>
         <div class="kg">${esc(w.text)}</div></div>`;
@@ -499,10 +520,10 @@ function renderProgress() {
   else {
     if (!lifts.some(l => l.ex === progLift)) progLift = lifts[0].ex;
     const l = lifts.find(x => x.ex === progLift);
-    const pts = l.e1rm.map(([d, v]) => [fromKey(d), v]);
+    const pts = l.e1rm.map(([d, v]) => [fromKey(d), wv(v)]);
     const first = pts[0][1], last = pts[pts.length - 1][1], ch = (last - first) / first;
     h += `<select id="liftSel" class="sel" aria-label="Lift">${lifts.map(x => `<option${x.ex === progLift ? ' selected' : ''}>${esc(x.ex)}</option>`).join('')}</select>
-      <div class="stat-row"><span class="stat">${fmt(last)} kg</span>
+      <div class="stat-row"><span class="stat">${fmt(last)} ${S.units}</span>
       <span class="delta ${ch >= 0 ? 'pos' : 'neg'}">${ch >= 0 ? '▲' : '▼'} ${Math.abs(Math.round(ch * 100))}%</span>
       <span class="small" style="margin:0">since ${esc(wkLabel(pts[0][0]))}</span></div>${lineChart(pts, 'Estimated 1-rep max')}`;
   }
@@ -529,7 +550,7 @@ function renderProgress() {
   const now = A.latest, thisMonth = moves.filter(mv => { const d = fromKey(mv.day); return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear(); }).length;
   h += `<div class="sec-head"><h2>Weight increases</h2><span class="small">${thisMonth} in ${now.toLocaleDateString('en-GB', { month: 'long' })}</span></div><div class="card">`;
   if (!moves.length) h += `<p class="note" style="margin:0">None yet${mus === 'All' ? '' : ` for ${mus.toLowerCase()}`}.</p>`;
-  for (const mv of moves.slice(0, 12)) h += `<div class="mv"><span class="mv-d">${esc(shortDate(mv.day))}</span><span class="mv-e">${esc(mv.ex)}</span><span class="kg">${fmt(mv.from)}<span class="arrow">→</span>${fmt(mv.to)}</span></div>`;
+  for (const mv of moves.slice(0, 12)) h += `<div class="mv"><span class="mv-d">${esc(shortDate(mv.day))}</span><span class="mv-e">${esc(mv.ex)}</span><span class="kg">${fmt(wv(mv.from))}<span class="arrow">→</span>${fmt(wv(mv.to))}</span></div>`;
   if (moves.length > 12) h += `<p class="small">+ ${moves.length - 12} earlier</p>`;
   h += '</div>';
 
@@ -541,6 +562,119 @@ function renderProgress() {
     ${barChart(ses, P.weeks, { label: 'Workouts per week', h: 120 })}</div>`;
   return h;
 }
+
+/* ---------- Prilepin (barbell lifts) ---------- */
+const PRILEPIN_LIFTS = new Set(['Bench Press (Barbell)', 'Incline Bench Press (Barbell)', 'Bent Over Row (Barbell)', 'Squat (Barbell)',
+  'Romanian Deadlift (Barbell)', 'Deadlift (Barbell)', 'Overhead Press (Barbell)', 'Hip Thrust (Barbell)']);
+const ZONES = [
+  { lo: 0,   hi: .70, name: '55–65%', reps: [3, 6], total: [18, 30], opt: 24, rx: [4, 6], seg: [55, 65] },
+  { lo: .70, hi: .80, name: '70–80%', reps: [3, 6], total: [12, 24], opt: 18, rx: [3, 6], seg: [70, 80] },
+  { lo: .80, hi: .90, name: '80–90%', reps: [2, 4], total: [10, 20], opt: 15, rx: [5, 3], seg: [80, 90] },
+  { lo: .90, hi: 9,   name: '90%+',   reps: [1, 2], total: [4, 10],  opt: 4,  rx: [2, 2], seg: [90, 100] },
+];
+const zoneOf = p => ZONES.find(z => p >= z.lo && p < z.hi);
+const usesPrilepin = l => S.style === 'prilepin' && l && PRILEPIN_LIFTS.has(l.ex);
+
+/* Training max = best estimated 1RM in the last 6 weeks. Next weight: +1 step after a clean
+   Prilepin session at the optimal total; pulled up to ~77% if lighter than 75%; never auto into 90%+. */
+function prilepin(l) {
+  if (l._p) return l._p;
+  const cut = fromKey(l.last.day); cut.setDate(cut.getDate() - 42);
+  let tm = 0;
+  for (const s of l.sessions) if (fromKey(s.day) >= cut) for (const [w, r] of s.sets) tm = Math.max(tm, w * (1 + Math.min(r, 12) / 30));
+  const cur = l.current, curPct = cur / tm, step = l.inc || 2.5;
+  const lz = zoneOf(curPct);
+  const top = l.last.sets.filter(s => s[0] === cur);
+  const clean = top.length > 0 && top.every(([, r]) => r >= lz.reps[0] && r <= lz.reps[1]);
+  const total = top.reduce((a, s) => a + s[1], 0);
+  let next = cur;
+  if (clean && total >= lz.opt) next = cur + step;
+  else if (curPct < 0.75) next = Math.max(cur, Math.round(0.77 * tm / step) * step);
+  if (next / tm >= 0.9 && next > cur) next = cur;
+  const pct = next / tm, zone = zoneOf(pct);
+  const zoneReps = l.last.sets.filter(([w]) => zoneOf(w / tm) === zone).reduce((a, s) => a + s[1], 0);
+  return (l._p = { tm, cur, curPct, next, pct, zone, zoneReps });
+}
+
+const pos = p => `${Math.max(0, Math.min(100, (p * 100 - 50) * 2)).toFixed(1)}%`;
+
+function pTile(l, opts = {}) {
+  const P = prilepin(l), z = P.zone;
+  const pc = v => `${Math.round(v * 100)}%`;
+  const moved = P.next !== P.cur;
+  let h = `<div class="card xc ptile${opts.expandable ? ' lift' : ''}${opts.expandable && openLift === l.ex ? ' open' : ''}"${opts.expandable ? ` data-lift="${esc(l.ex)}"` : ''}>
+    <div class="xc-top"><div class="ex">${esc(l.ex)}</div><span class="badge zone">${z.name}</span></div>
+    <div class="phero"><div><div class="today-kg">${W(P.next)}</div><div class="small" style="margin-top:2px">${pc(P.pct)} of 1RM · est. ${W(Math.round(P.tm * 10) / 10)}</div></div>
+      <div style="text-align:right"><div class="prx">${z.rx[0] * z.rx[1]} reps</div><div class="small" style="margin-top:2px">${z.rx[0]} × ${z.rx[1]} · optimal</div></div></div>
+    <div><div class="plab"><span>Intensity</span><span class="pval" style="color:var(--zone)">${pc(P.pct)}${moved ? ` <span style="color:var(--accent)">${P.next > P.cur ? '↑' : '↓'} from ${pc(P.curPct)}</span>` : ''}</span></div>
+      <div class="pscale" role="img" aria-label="Intensity ${pc(P.pct)}, zone ${z.name}">`;
+  for (const zz of ZONES) h += `<div class="pseg${zz === z ? ' on' : ''}" style="left:calc(${pos(zz.seg[0] / 100)} + 1px);width:calc(${pos(zz.seg[1] / 100)} - ${pos(zz.seg[0] / 100)} - 2px)"></div>`;
+  if (moved) h += `<div class="pmark" style="left:${pos(P.curPct)};opacity:.35"></div>`;
+  h += `<div class="pmark" style="left:${pos(P.pct)}"></div></div>
+      <div class="pticks">${[55, 65, 70, 80, 90].map(t => `<span style="left:${pos(t / 100)}">${t}</span>`).join('')}<span style="left:97%">100</span></div></div>`;
+  // Reps in zone, last time
+  const max = z.total[1] * 1.25, pp = v => `${Math.min(100, v / max * 100).toFixed(1)}%`;
+  const st = P.zoneReps < z.total[0] ? 'bad' : P.zoneReps > z.total[1] ? 'warn' : 'accent';
+  h += `<div><div class="plab"><span>Reps in zone · last time</span><span class="pval" style="color:var(--${st})">${P.zoneReps} of ${z.total[0]}–${z.total[1]}</span></div>
+      <div class="pmeter" role="img" aria-label="${P.zoneReps} reps in zone last time; range ${z.total[0]} to ${z.total[1]}, optimal ${z.opt}">
+        <div class="pband" style="left:${pp(z.total[0])};width:calc(${pp(z.total[1])} - ${pp(z.total[0])})"></div>
+        <div class="pfill" style="width:${pp(P.zoneReps)};background:var(--${st})"></div>
+        <div class="popt" style="left:${pp(z.opt)}"></div></div>
+      <div class="pticks"><span style="left:${pp(z.total[0])}">${z.total[0]}</span><span style="left:${pp(z.opt)}">${z.opt}</span><span style="left:${pp(z.total[1])}">${z.total[1]}</span></div></div>`;
+  // Sets grid: last session, its weights, and next session's target
+  const sets = l.last.sets, cols = Math.max(3, sets.length, z.rx[0]);
+  h += `<div class="sets" style="grid-template-columns: 2.6rem repeat(${cols}, minmax(0, 1fr))"><span class="lab"></span>`;
+  for (let i = 0; i < cols; i++) h += `<span class="hd">${i + 1}</span>`;
+  h += `<span class="lab">${esc(shortDate(l.last.day))}</span>`;
+  for (let i = 0; i < cols; i++) {
+    if (i >= sets.length) { h += '<span></span>'; continue; }
+    const [w, r] = sets[i];
+    const cls = zoneOf(w / P.tm) !== z ? 'ramp' : r < z.reps[0] ? 'miss' : r > z.reps[1] ? 'over' : 'hit';
+    h += `<span class="rep ${cls}" aria-label="${r} reps, ${{ ramp: 'lighter set', miss: 'under zone', over: 'over zone', hit: 'in zone' }[cls]}">${r}</span>`;
+  }
+  h += `<span class="lab">${S.units}</span>`;
+  for (let i = 0; i < cols; i++) h += `<span class="w">${i < sets.length ? fmt(wv(sets[i][0])) : ''}</span>`;
+  h += '<span class="lab">Next</span>';
+  for (let i = 0; i < cols; i++) h += i < z.rx[0] ? `<span class="rep plan">${z.rx[1]}</span>` : '<span></span>';
+  h += '</div>';
+  if (opts.expandable) h += `<div class="detail">${l.history.length > 1 ? spark(l.history) : ''}<div class="small">Prilepin zone ${z.name}: ${z.reps[0]}–${z.reps[1]} reps per set, ${z.total[0]}–${z.total[1]} in total, ${z.opt} optimal.</div></div>
+    <div class="more" aria-hidden="true">${openLift === l.ex ? 'Less' : 'History'}</div>`;
+  return h + '</div>';
+}
+
+function pLegend() {
+  return `<div class="key"><span><i class="dot hit"></i>In zone</span><span><i class="dot over"></i>Over zone</span><span><i class="dot miss"></i>Under</span><span><i class="dot ramp"></i>Lighter</span><span><i class="dot plan"></i>Next</span></div>`;
+}
+
+/* ---------- Menu ---------- */
+function renderMenu() {
+  const imp = store.get('lc_imported_at');
+  const impTxt = imp ? `Hevy CSV · last import ${new Date(imp).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}` : 'Hevy CSV export';
+  const seg = (key, opts, label) => `<div class="mseg" role="group" aria-label="${label}">${opts.map(([v, t]) => `<button type="button" data-set="${key}" data-val="${v}" aria-pressed="${S[key] === v}">${t}</button>`).join('')}</div>`;
+  $('#drawer').innerHTML = `
+    <div class="dhead"><b>Menu</b><button type="button" class="iconbtn" data-act="close" aria-label="Close menu"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="dscroll">
+    <div class="grp">Data</div>
+    <button type="button" class="mitem" data-act="import"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg><span><span class="mt">Import workouts</span><span class="ms">${esc(impTxt)}</span></span></button>
+    <button type="button" class="mitem" data-act="howto" aria-expanded="false"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></svg><span><span class="mt">How to export from Hevy</span><span class="ms">Profile › Settings › Export data</span></span></button>
+    <ol class="howto" id="howto" hidden><li>In Hevy, open <b>Profile</b> → ⚙ <b>Settings</b>.</li><li>Tap <b>Export &amp; Import Data</b> → <b>Export Workouts</b>.</li><li>Share the file to <b>Lift Coach</b>, or save it and use <b>Import workouts</b>.</li></ol>
+    <div class="grp">Training</div>
+    <div class="mrowx"><div class="mt">Barbell lifts</div>${seg('style', [['rep', 'Rep targets'], ['prilepin', 'Prilepin']], 'Progression style for barbell lifts')}<div class="ms">Accessories always use rep targets.</div></div>
+    <div class="mrowx"><div class="mt">Next session</div>${seg('next', [['rotation', 'In rotation'], ['weekday', 'By weekday']], 'How the next session is chosen')}
+      <div class="ms">${S.next === 'rotation' ? 'Follows your last workout. Name Hevy workouts Upper A, Lower A, Upper B, Lower B to keep it in step.' : 'Mon Upper A · Wed Lower A · Fri Upper B · Sun Lower B'}</div></div>
+    <div class="mrowx"><div class="mt">Units</div>${seg('units', [['kg', 'kg'], ['lb', 'lb']], 'Weight units')}</div>
+    </div>
+    <button type="button" class="mitem danger" data-act="clear"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg><span class="mt" id="clearLbl">Clear data on this phone</span></button>
+    <div class="dfoot">Lift Coach · your data stays on this phone</div>`;
+}
+
+function openMenu(open) {
+  const d = $('#drawer'), s = $('#scrim');
+  if (open) { renderMenu(); d.hidden = false; s.hidden = false; requestAnimationFrame(() => { d.classList.add('open'); s.classList.add('open'); }); $('#drawer [data-act="close"]').focus(); }
+  else { d.classList.remove('open'); s.classList.remove('open'); setTimeout(() => { d.hidden = true; s.hidden = true; }, 200); $('#menuBtn').focus(); }
+}
+
+function saveSettings() { store.set('lc_settings', JSON.stringify(S)); }
 
 function render() {
   const main = $('#main');
@@ -555,14 +689,36 @@ function load(text, quiet) {
   try {
     A = analyse(text);
     if (!store.set('hevy_csv', text) && !quiet) toast('Imported, but this phone would not save it for next time.');
-    else if (!quiet) toast(`Imported ${A.workouts} workouts`);
+    else if (!quiet) { store.set('lc_imported_at', new Date().toISOString()); toast(`Imported ${A.workouts} workouts`); }
     render();
     return true;
   } catch (e) { toast(e.message || 'Could not read that file.'); return false; }
 }
 
 /* ---------- Events ---------- */
-$('#importBtn').addEventListener('click', () => $('#file').click());
+$('#menuBtn').addEventListener('click', () => openMenu(true));
+$('#scrim').addEventListener('click', () => openMenu(false));
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#drawer').hidden) openMenu(false); });
+let clearArm = 0;
+$('#drawer').addEventListener('click', e => {
+  const s = e.target.closest('[data-set]');
+  if (s) {
+    const k = s.dataset.set, v = s.dataset.val; if (S[k] === v) return;
+    S[k] = v; saveSettings();
+    if (k === 'units' && A) { const csv = store.get('hevy_csv'); if (csv) A = analyse(csv); }
+    renderMenu(); render(); return;
+  }
+  const a = e.target.closest('[data-act]'); if (!a) return;
+  const act = a.dataset.act;
+  if (act === 'close') return openMenu(false);
+  if (act === 'import') { openMenu(false); return $('#file').click(); }
+  if (act === 'howto') { const h = $('#howto'); h.hidden = !h.hidden; a.setAttribute('aria-expanded', String(!h.hidden)); return; }
+  if (act === 'clear') {
+    if (Date.now() - clearArm > 4000) { clearArm = Date.now(); $('#clearLbl').textContent = 'Tap again to clear all data'; setTimeout(() => { const c = $('#clearLbl'); if (c) c.textContent = 'Clear data on this phone'; }, 4000); return; }
+    try { localStorage.removeItem('hevy_csv'); localStorage.removeItem('lc_imported_at'); } catch (err) { /* nothing stored */ }
+    A = null; clearArm = 0; openMenu(false); render(); toast('Workout data cleared from this phone');
+  }
+});
 $('#file').addEventListener('change', async e => { const f = e.target.files[0]; if (f) load(await f.text()); e.target.value = ''; });
 $('#main').addEventListener('click', e => {
   if (e.target.closest('[data-import]')) return $('#file').click();
