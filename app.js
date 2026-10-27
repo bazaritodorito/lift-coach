@@ -709,7 +709,7 @@ function render() {
   $('#tabs').hidden = !A;
   if (tab === 'chart') { main.innerHTML = renderChart(); $('#tabs').hidden = !A; document.querySelectorAll('#tabs [data-tab]').forEach(b => b.setAttribute('aria-selected', 'false')); return; }
   if (!A) { main.innerHTML = emptyView(); $('#sub').textContent = 'No workouts imported yet'; return; }
-  $('#sub').textContent = `Data to ${A.latest.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })} · ${A.blockWorkouts} recent workouts`;
+  $('#sub').textContent = `Last Workout: ${A.latest.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`;
   main.innerHTML = tab === 'next' ? renderNext() : tab === 'lifts' ? renderLifts() : tab === 'balance' ? renderBalance() : tab === 'progress' ? renderProgress() : renderPlan();
   document.querySelectorAll('#tabs [data-tab]').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === tab));
 }
