@@ -773,5 +773,10 @@ $('#tabs').addEventListener('click', e => { const b = e.target.closest('[data-ta
   }
   if (!A) { const saved = store.get('hevy_csv'); if (saved) load(saved, true); }
   render();
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+  if ('serviceWorker' in navigator) {
+    // When a new version takes over, reload once so it shows straight away.
+    const hadController = !!navigator.serviceWorker.controller; let reloaded = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => { if (hadController && !reloaded) { reloaded = true; location.reload(); } });
+    navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(r => r.update()).catch(() => {});
+  }
 })();

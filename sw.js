@@ -1,4 +1,4 @@
-const VERSION = 'onerepmax-v7';
+const VERSION = 'onerepmax-v8';
 const SHELL = ['./', 'index.html', 'app.js', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png',
   'favicon.ico', 'favicon.svg', 'apple-touch-icon.png', 'assets/logo-horizontal-on-dark.svg', 'assets/logo-horizontal-on-light.svg',
   'assets/logo-stacked-on-dark.svg', 'assets/logo-stacked-on-light.svg',
@@ -34,7 +34,9 @@ self.addEventListener('fetch', e => {
   }
   if (e.request.method !== 'GET' || url.origin !== location.origin) return;
   // Network first so updates arrive, cache as fallback so it works offline.
-  e.respondWith(fetch(e.request).then(res => {
+  // Always revalidate with the server so a new version shows up on the next open (Pages caches files for 10 min).
+  const fresh = e.request.mode === 'navigate' ? new Request(e.request.url, { cache: 'no-cache' }) : new Request(e.request, { cache: 'no-cache' });
+  e.respondWith(fetch(fresh).then(res => {
     const copy = res.clone();
     caches.open(VERSION).then(c => c.put(e.request, copy));
     return res;
