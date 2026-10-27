@@ -175,6 +175,20 @@ function analyse(text) {
   const balance = GROUPS.map(g => ({ group: g, weeks: vol[g], avg: vol[g].reduce((a, b) => a + b, 0) / 4, target: TARGET[g], planned: planned[g] }));
 
   // Progression per exercise.
+  // 12-week series for the Progress tab.
+  const W12 = Array.from({ length: 12 }, (_, k) => { const x = new Date(lastMon); x.setDate(x.getDate() - 7 * (11 - k)); return x; });
+  const wkOf = dt => { for (let i = 11; i >= 0; i--) if (dt >= W12[i]) { const e = new Date(W12[i]); e.setDate(e.getDate() + 7); return dt < e ? i : -1; } return -1; };
+  const vol12 = Object.fromEntries(GROUPS.map(g => [g, Array(12).fill(0)]));
+  const ses12 = Array.from({ length: 12 }, () => new Set());
+  const mses12 = Object.fromEntries(GROUPS.map(g => [g, Array.from({ length: 12 }, () => new Set())]));
+  for (const s of sets) {
+    if (s.type === 'warmup' || s.type === 'warm up' || s.ex === 'Warm Up') continue;
+    const wi = wkOf(s.dt); if (wi < 0) continue;
+    ses12[wi].add(+s.dt);
+    if (EX[s.ex]) for (const [m, f] of Object.entries(EX[s.ex][3])) { vol12[m][wi] += f; if (f === 1) mses12[m][wi].add(+s.dt); }
+    else if (CORE.has(s.ex)) { vol12.Core[wi] += 1; mses12.Core[wi].add(+s.dt); }
+  }
+  const moves = [];
   const byEx = {};
   for (const s of work) if (EX[s.ex] && s.w != null && s.w > 0 && s.reps != null) (byEx[s.ex] = byEx[s.ex] || []).push(s);
   const activeCut = new Date(latest); activeCut.setDate(activeCut.getDate() - 28);
@@ -197,6 +211,18 @@ function analyse(text) {
     const prior = sessions.slice(0, -1).filter(s => fromKey(s.day) >= sixWk && s.top > last.top && Math.min(...s.repsAtTop) >= lo)
       .sort((a, b) => b.top - a.top)[0];
     if (inc === 0) continue;
+    // Estimated 1-rep max (Epley) from the best set each session.
+    const e1rm = Object.entries(days).map(([day, ss]) => [day, Math.round(Math.max(...ss.map(s => s.w * (1 + Math.min(s.reps, 15) / 30))) * 10) / 10]);
+    // Weight increases: a new heaviest weight done for 2+ sets.
+    let best = 0;
+    sessions.forEach((s, i) => {
+      if (s.repsAtTop.length < 2 || s.top <= best) return;
+      if (best > 0 && s.top - best >= 1) {
+        const below = sessions.slice(0, i).map(p => p.top).filter(w => w < s.top);
+        moves.push({ day: s.day, ex, from: below.length ? Math.max(...below) : best, to: s.top });
+      }
+      best = s.top;
+    });
     if (reps.length >= 2 && Math.min(...reps) >= hi) {
       status = 'ready'; next = Math.round((last.top + inc) * 10) / 10;
       note = `Every set at ${fmt(last.top)} kg hit ${hi}+ reps. Go to ${fmt(next)} kg.`;
@@ -220,12 +246,14 @@ function analyse(text) {
     const n = sessions.length;
     const stalled = sameRun >= 5 && Math.max(...sessions.slice(n - 3).map(mean)) <= mean(sessions[n - 4]);
     if (status !== 'ready' && stalled) note += ` No progress for ${sameRun} sessions: do it first in the workout, or drop 10% and build back up.`;
-    lifts.push({ ex, muscle: Object.entries(EX[ex][3]).sort((a, b) => b[1] - a[1])[0][0], lo, hi, inc, status, current: last.top, next, note, shortBy, stalled: status !== 'ready' && stalled, single: status === 'building' && reps.length === 1 && sessions.length > 1,
+    lifts.push({ ex, muscle: Object.entries(EX[ex][3]).sort((a, b) => b[1] - a[1])[0][0], lo, hi, inc, status, current: last.top, next, note, e1rm, shortBy, stalled: status !== 'ready' && stalled, single: status === 'building' && reps.length === 1 && sessions.length > 1,
       last, active, sessions, history: sessions.map(s => [s.day, s.top]) });
   }
   const order = { ready: 0, almost: 1, building: 2 };
   lifts.sort((a, b) => order[a.status] - order[b.status] || a.ex.localeCompare(b.ex));
-  return { latest, workouts, blockWorkouts, weeks, balance, lifts, uncounted: [...uncounted] };
+  moves.sort((a, b) => b.day.localeCompare(a.day) || a.ex.localeCompare(b.ex));
+  const progress = { weeks: W12, vol: vol12, sessions: ses12.map(x => x.size), musSessions: Object.fromEntries(GROUPS.map(g => [g, mses12[g].map(x => x.size)])), moves };
+  return { latest, workouts, blockWorkouts, weeks, balance, lifts, progress, uncounted: [...uncounted] };
 }
 
 /* ---------- Rendering ---------- */
@@ -391,12 +419,135 @@ function emptyView() {
     <div><button class="btn primary" type="button" data-import>Import CSV</button></div></div>`;
 }
 
+
+/* ---------- Progress tab ---------- */
+let progMuscle = 'All', progLift = null;
+const PRIMARY = ex => EX[ex] ? Object.entries(EX[ex][3]).filter(([, f]) => f === 1).map(([m]) => m) : CORE.has(ex) ? ['Core'] : [];
+const wkLabel = d => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+const chartW = () => Math.max(260, Math.min(640, $('#main').clientWidth) - 30);
+
+function textW(s, size) { return String(s).length * size * 0.58; }
+
+/* Line chart of [Date, value] points. */
+function lineChart(pts, unit) {
+  const W = chartW(), H = 170, m = { t: 14, r: 10, b: 22, l: 10 };
+  const vals = pts.map(p => p[1]);
+  let lo = Math.min(...vals), hi = Math.max(...vals);
+  const padV = Math.max(2, (hi - lo) * 0.15); lo = Math.max(0, lo - padV); hi = hi + padV;
+  const ticks = [lo, (lo + hi) / 2, hi].map(v => Math.round(v));
+  m.l = Math.max(...ticks.map(t => textW(t, 10))) + 8;
+  const x0 = +pts[0][0], x1 = +pts[pts.length - 1][0];
+  const lastLab = `${fmt(vals[vals.length - 1])}`;
+  m.r = textW(lastLab, 11) + 10;
+  const X = d => m.l + (x1 === x0 ? (W - m.l - m.r) / 2 : (d - x0) / (x1 - x0) * (W - m.l - m.r));
+  const Y = v => H - m.b - (v - lo) / (hi - lo) * (H - m.t - m.b);
+  let s = `<svg class="chart" viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="${esc(unit)} over time">`;
+  for (const t of ticks) s += `<line x1="${m.l}" x2="${W - m.r}" y1="${Y(t).toFixed(1)}" y2="${Y(t).toFixed(1)}" stroke="var(--line)"/>
+    <text x="${m.l - 6}" y="${(Y(t) + 3.5).toFixed(1)}" text-anchor="end" font-size="10" fill="var(--muted)">${t}</text>`;
+  s += `<text x="${m.l}" y="${H - 5}" font-size="10" fill="var(--muted)">${esc(wkLabel(pts[0][0]))}</text>
+    <text x="${W - m.r}" y="${H - 5}" text-anchor="end" font-size="10" fill="var(--muted)">${esc(wkLabel(pts[pts.length - 1][0]))}</text>`;
+  s += `<polyline points="${pts.map(p => `${X(p[0]).toFixed(1)},${Y(p[1]).toFixed(1)}`).join(' ')}" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>`;
+  pts.forEach((p, i) => { s += `<circle cx="${X(p[0]).toFixed(1)}" cy="${Y(p[1]).toFixed(1)}" r="${i === pts.length - 1 ? 4.5 : 3}" fill="var(--accent)"/>`; });
+  const lp = pts[pts.length - 1];
+  s += `<text x="${(X(lp[0]) + 8).toFixed(1)}" y="${(Y(lp[1]) + 4).toFixed(1)}" font-size="11" font-weight="700" fill="var(--fg)">${esc(lastLab)}</text>`;
+  return s + '</svg>';
+}
+
+/* Bar chart over the 12 weeks. opts: target (dashed line), hitColor rule. */
+function barChart(values, weeks, opts = {}) {
+  const W = chartW(), H = opts.h || 150, m = { t: 16, r: 4, b: 22, l: 4 };
+  const max = Math.max(1, ...values, opts.target || 0) * 1.08;
+  const n = values.length, gap = 4, bw = (W - m.l - m.r - gap * (n - 1)) / n;
+  const Y = v => H - m.b - v / max * (H - m.t - m.b);
+  let s = `<svg class="chart" viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="${esc(opts.label || 'Weekly values')}">`;
+  s += `<line x1="${m.l}" x2="${W - m.r}" y1="${H - m.b}" y2="${H - m.b}" stroke="var(--line)"/>`;
+  if (opts.target != null) s += `<line x1="${m.l}" x2="${W - m.r}" y1="${Y(opts.target).toFixed(1)}" y2="${Y(opts.target).toFixed(1)}" stroke="var(--fg)" stroke-opacity=".45" stroke-dasharray="4 4"/>`;
+  values.forEach((v, i) => {
+    const x = m.l + i * (bw + gap), y = Y(v), h = H - m.b - y;
+    const fill = opts.target == null ? 'var(--accent)' : v >= opts.target ? 'var(--accent)' : 'var(--bar)';
+    if (v > 0) s += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(1, h).toFixed(1)}" rx="${Math.min(4, bw / 2)}" fill="${fill}"/>`;
+    if (v > 0 && bw >= 16) s += `<text x="${(x + bw / 2).toFixed(1)}" y="${(y - 4).toFixed(1)}" text-anchor="middle" font-size="10" fill="var(--muted)" paint-order="stroke" stroke="var(--panel)" stroke-width="3">${fmt(v)}</text>`;
+    if (i % 3 === (n - 1) % 3) s += `<text x="${(x + bw / 2).toFixed(1)}" y="${H - 6}" text-anchor="middle" font-size="10" fill="var(--muted)">${esc(wkLabel(weeks[i]))}</text>`;
+  });
+  return s + '</svg>';
+}
+
+/* Tiny 12-bar strip for the All-muscles overview. */
+function miniBars(values, target) {
+  const W = 132, H = 26, n = values.length, gap = 2, bw = (W - gap * (n - 1)) / n;
+  const max = Math.max(1, ...values, target) * 1.05;
+  let s = `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" aria-hidden="true">`;
+  values.forEach((v, i) => {
+    const h = v / max * H;
+    s += `<rect x="${(i * (bw + gap)).toFixed(1)}" y="${(H - Math.max(1.5, h)).toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(1.5, h).toFixed(1)}" rx="1.5" fill="${v >= target ? 'var(--accent)' : v > 0 ? 'var(--bar)' : 'var(--line)'}"/>`;
+  });
+  const ty = H - target / max * H;
+  return s + `<line x1="0" x2="${W}" y1="${ty.toFixed(1)}" y2="${ty.toFixed(1)}" stroke="var(--fg)" stroke-opacity=".5" stroke-dasharray="2 2"/></svg>`;
+}
+
+function renderProgress() {
+  const P = A.progress, mus = progMuscle;
+  let h = `<div class="chips" role="group" aria-label="Muscle group">`;
+  for (const g of ['All', ...GROUPS]) h += `<button type="button" data-muscle="${g}" aria-pressed="${mus === g}">${g}</button>`;
+  h += '</div>';
+
+  // 1. Strength
+  const lifts = A.lifts.filter(l => l.e1rm.length >= 2 && (mus === 'All' || PRIMARY(l.ex).includes(mus)))
+    .sort((a, b) => b.e1rm.length - a.e1rm.length || a.ex.localeCompare(b.ex));
+  h += `<div class="sec-head"><h2>Strength</h2><span class="small">est. 1-rep max</span></div><div class="card">`;
+  if (!lifts.length) h += `<p class="note" style="margin:0">No weighted lifts with 2+ sessions${mus === 'All' ? '' : ` for ${mus.toLowerCase()}`} yet.</p>`;
+  else {
+    if (!lifts.some(l => l.ex === progLift)) progLift = lifts[0].ex;
+    const l = lifts.find(x => x.ex === progLift);
+    const pts = l.e1rm.map(([d, v]) => [fromKey(d), v]);
+    const first = pts[0][1], last = pts[pts.length - 1][1], ch = (last - first) / first;
+    h += `<select id="liftSel" class="sel" aria-label="Lift">${lifts.map(x => `<option${x.ex === progLift ? ' selected' : ''}>${esc(x.ex)}</option>`).join('')}</select>
+      <div class="stat-row"><span class="stat">${fmt(last)} kg</span>
+      <span class="delta ${ch >= 0 ? 'pos' : 'neg'}">${ch >= 0 ? '▲' : '▼'} ${Math.abs(Math.round(ch * 100))}%</span>
+      <span class="small" style="margin:0">since ${esc(wkLabel(pts[0][0]))}</span></div>${lineChart(pts, 'Estimated 1-rep max')}`;
+  }
+  h += '</div>';
+
+  // 2. Weekly sets
+  h += `<div class="sec-head"><h2>Weekly sets</h2><span class="small">last 12 weeks</span></div><div class="card">`;
+  if (mus === 'All') {
+    h += `<div class="key" style="margin-bottom:6px"><span><i class="dot" style="background:var(--accent)"></i>On target</span><span><i class="dot" style="background:var(--bar)"></i>Under</span><span>- - target</span></div>`;
+    for (const g of GROUPS) {
+      const v = P.vol[g], last4 = v.slice(-4).reduce((a, b) => a + b, 0) / 4;
+      h += `<button type="button" class="mrow" data-muscle="${g}"><span class="mname">${g}</span>${miniBars(v, TARGET[g])}<span class="mval ${last4 >= TARGET[g] ? 'pos' : 'neg'}">${fmt(last4)}</span></button>`;
+    }
+    h += `<p class="small">Right-hand number: average over the last 4 weeks. Tap a muscle for detail.</p>`;
+  } else {
+    const v = P.vol[mus], last4 = v.slice(-4).reduce((a, b) => a + b, 0) / 4;
+    h += `<div class="stat-row"><span class="stat">${fmt(last4)}</span><span class="small" style="margin:0">sets/week, last 4 weeks · target ${TARGET[mus]}</span></div>
+      ${barChart(v, P.weeks, { target: TARGET[mus], label: `${mus} sets per week` })}`;
+  }
+  h += '</div>';
+
+  // 3. Move-ups
+  const moves = P.moves.filter(mv => mus === 'All' || PRIMARY(mv.ex).includes(mus));
+  const now = A.latest, thisMonth = moves.filter(mv => { const d = fromKey(mv.day); return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear(); }).length;
+  h += `<div class="sec-head"><h2>Weight increases</h2><span class="small">${thisMonth} in ${now.toLocaleDateString('en-GB', { month: 'long' })}</span></div><div class="card">`;
+  if (!moves.length) h += `<p class="note" style="margin:0">None yet${mus === 'All' ? '' : ` for ${mus.toLowerCase()}`}.</p>`;
+  for (const mv of moves.slice(0, 12)) h += `<div class="mv"><span class="mv-d">${esc(shortDate(mv.day))}</span><span class="mv-e">${esc(mv.ex)}</span><span class="kg">${fmt(mv.from)}<span class="arrow">→</span>${fmt(mv.to)}</span></div>`;
+  if (moves.length > 12) h += `<p class="small">+ ${moves.length - 12} earlier</p>`;
+  h += '</div>';
+
+  // 4. Consistency
+  const ses = mus === 'All' ? P.sessions : P.musSessions[mus];
+  const avg = ses.slice(-4).reduce((a, b) => a + b, 0) / 4;
+  h += `<div class="sec-head"><h2>Consistency</h2><span class="small">${mus === 'All' ? 'workouts' : `workouts with ${mus.toLowerCase()}`} per week</span></div>
+    <div class="card"><div class="stat-row"><span class="stat">${fmt(avg)}</span><span class="small" style="margin:0">per week, last 4 weeks</span></div>
+    ${barChart(ses, P.weeks, { label: 'Workouts per week', h: 120 })}</div>`;
+  return h;
+}
+
 function render() {
   const main = $('#main');
   $('#tabs').hidden = !A;
   if (!A) { main.innerHTML = emptyView(); $('#sub').textContent = 'No workouts imported yet'; return; }
   $('#sub').textContent = `Data to ${A.latest.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })} · ${A.blockWorkouts} recent workouts`;
-  main.innerHTML = tab === 'next' ? renderNext() : tab === 'lifts' ? renderLifts() : tab === 'balance' ? renderBalance() : renderPlan();
+  main.innerHTML = tab === 'next' ? renderNext() : tab === 'lifts' ? renderLifts() : tab === 'balance' ? renderBalance() : tab === 'progress' ? renderProgress() : renderPlan();
   document.querySelectorAll('#tabs [data-tab]').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === tab));
 }
 
@@ -415,9 +566,12 @@ $('#importBtn').addEventListener('click', () => $('#file').click());
 $('#file').addEventListener('change', async e => { const f = e.target.files[0]; if (f) load(await f.text()); e.target.value = ''; });
 $('#main').addEventListener('click', e => {
   if (e.target.closest('[data-import]')) return $('#file').click();
+  const mu = e.target.closest('[data-muscle]'); if (mu) { progMuscle = mu.dataset.muscle; return render(); }
   const f = e.target.closest('[data-filter]'); if (f) { liftFilter = f.dataset.filter; return render(); }
   const l = e.target.closest('[data-lift]'); if (l) { openLift = openLift === l.dataset.lift ? null : l.dataset.lift; render(); }
 });
+$('#main').addEventListener('change', e => { if (e.target.id === 'liftSel') { progLift = e.target.value; render(); } });
+let rsz; window.addEventListener('resize', () => { clearTimeout(rsz); rsz = setTimeout(() => { if (A && tab === 'progress') render(); }, 150); });
 $('#tabs').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (b) { tab = b.dataset.tab; render(); window.scrollTo(0, 0); } });
 
 /* ---------- Start ---------- */
