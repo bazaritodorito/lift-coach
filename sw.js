@@ -1,5 +1,9 @@
-const VERSION = 'lift-coach-v4';
-const SHELL = ['./', 'index.html', 'app.js', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png'];
+const VERSION = 'onerepmax-v5';
+const SHELL = ['./', 'index.html', 'app.js', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png',
+  'favicon.ico', 'favicon.svg', 'apple-touch-icon.png', 'assets/logo-horizontal-on-dark.svg', 'assets/logo-horizontal-on-light.svg',
+  'assets/logo-stacked-on-dark.svg', 'assets/logo-stacked-on-light.svg',
+  'assets/fonts/barlow-condensed-latin-500-normal.woff2', 'assets/fonts/barlow-condensed-latin-600-normal.woff2',
+  'assets/fonts/barlow-condensed-latin-700-normal.woff2', 'assets/fonts/barlow-condensed-latin-800-italic.woff2'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(VERSION).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));

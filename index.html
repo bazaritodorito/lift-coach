@@ -3,41 +3,61 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Lift Coach</title>
+<title>OneRepMax</title>
 <meta name="description" content="Move-up calls, muscle balance and a weekly plan from your Hevy workouts.">
-<meta name="theme-color" content="#16181d" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#0E0F11" media="(prefers-color-scheme: dark)">
 <meta name="theme-color" content="#f6f5f1" media="(prefers-color-scheme: light)">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" href="icon-192.png" type="image/png">
-<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" href="favicon.ico" sizes="any">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+
 <style>
+@font-face { font-family: "Barlow Condensed"; font-style: normal; font-weight: 500; font-display: swap; src: url("assets/fonts/barlow-condensed-latin-500-normal.woff2") format("woff2"); }
+@font-face { font-family: "Barlow Condensed"; font-style: normal; font-weight: 600; font-display: swap; src: url("assets/fonts/barlow-condensed-latin-600-normal.woff2") format("woff2"); }
+@font-face { font-family: "Barlow Condensed"; font-style: normal; font-weight: 700; font-display: swap; src: url("assets/fonts/barlow-condensed-latin-700-normal.woff2") format("woff2"); }
+@font-face { font-family: "Barlow Condensed"; font-style: italic; font-weight: 800; font-display: swap; src: url("assets/fonts/barlow-condensed-latin-800-italic.woff2") format("woff2"); }
 :root {
   --bg: #f6f5f1; --panel: #ffffff; --fg: #1d1f24; --muted: #6b6f78; --line: #e4e2dc;
   --accent: #2f6f4f; --accent-soft: #e3efe8; --warn: #9a6408; --warn-soft: #f6ecd8;
   --bad: #b23b2e; --bad-soft: #f6e1de; --bar: #c9c6bd; --plan: #2b5fb4; --zone: #2b5fb4; --zone-soft: #e1eaf8;
+  --brand: #D4FF3A; --on-brand: #0E0F11; --brand-text: #4a5c00;
   --radius: 14px;
-  --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font: "Barlow Condensed", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #16181d; --panel: #1f2228; --fg: #eceae4; --muted: #9a9ea8; --line: #30343c;
+    --bg: #0E0F11; --panel: #17191c; --fg: #F4F4F0; --muted: #A3A5AA; --line: #2a2d33; --brand-text: #D4FF3A;
     --accent: #6fcf97; --accent-soft: #1f3a2b; --warn: #e6b45a; --warn-soft: #3b3020;
-    --bad: #f08b7f; --bad-soft: #3d2422; --bar: #4a4e57; --plan: #7aa7f5; --zone: #7aa7f5; --zone-soft: #1d2e45;
+    --bad: #f08b7f; --bad-soft: #3d2422; --bar: #464a52; --plan: #7aa7f5; --zone: #7aa7f5; --zone-soft: #1d2e45;
   }
 }
 :root[data-theme="dark"] {
-  --bg: #16181d; --panel: #1f2228; --fg: #eceae4; --muted: #9a9ea8; --line: #30343c;
+  --bg: #0E0F11; --panel: #17191c; --fg: #F4F4F0; --muted: #A3A5AA; --line: #2a2d33; --brand-text: #D4FF3A;
   --accent: #6fcf97; --accent-soft: #1f3a2b; --warn: #e6b45a; --warn-soft: #3b3020;
-  --bad: #f08b7f; --bad-soft: #3d2422; --bar: #4a4e57; --plan: #7aa7f5; --zone: #7aa7f5; --zone-soft: #1d2e45;
+  --bad: #f08b7f; --bad-soft: #3d2422; --bar: #464a52; --plan: #7aa7f5; --zone: #7aa7f5; --zone-soft: #1d2e45;
 }
 * { box-sizing: border-box; }
+html { font-size: 17px; }
 html, body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--font); -webkit-tap-highlight-color: transparent; }
 body { padding-bottom: calc(72px + env(safe-area-inset-bottom)); }
 button { font: inherit; color: inherit; }
 .wrap { max-width: 640px; margin: 0 auto; padding: 0 16px; }
 header.top { position: sticky; top: 0; z-index: 5; background: var(--bg); padding: calc(12px + env(safe-area-inset-top)) 0 10px; border-bottom: 1px solid var(--line); }
 header.top .wrap { display: flex; align-items: center; gap: 12px; }
-header.top h1 { font-size: 1.15rem; margin: 0; letter-spacing: -.01em; }
+header.top h1 { margin: 0; line-height: 0; }
+.logo { height: 26px; width: auto; display: block; }
+.logo-dark { display: none; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .logo-dark { display: block; } :root:not([data-theme="light"]) .logo-light { display: none; } }
+header.top .sub { margin-top: 5px; }
+.today-kg, .stat, .tile .big, .prx, .big-target { font-weight: 800; font-style: italic; letter-spacing: 0; }
+h2 { font-weight: 700; letter-spacing: .01em; }
+nav.tabs button[aria-selected="true"] { color: var(--brand-text) !important; }
+.badge.up { background: var(--brand) !important; color: var(--on-brand) !important; }
+.btn.primary { background: var(--brand) !important; border-color: var(--brand) !important; color: var(--on-brand) !important; }
+.empty .stack { width: min(240px, 70%); height: auto; display: block; margin: 0 auto 18px; }
+.empty .stack.logo-dark { display: none; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .empty .stack.logo-dark { display: block; } }
 header.top .sub { font-size: .78rem; color: var(--muted); }
 header.top .grow { flex: 1; min-width: 0; }
 .btn { border: 1px solid var(--line); background: var(--panel); border-radius: 999px; padding: 8px 14px; font-size: .85rem; cursor: pointer; white-space: nowrap; }
@@ -191,7 +211,7 @@ ul.rules li { margin-bottom: 6px; }
 </head>
 <body>
 <header class="top"><div class="wrap">
-  <div class="grow"><h1>Lift Coach</h1><div class="sub" id="sub">No workouts imported yet</div></div>
+  <div class="grow"><h1><img class="logo logo-light" src="assets/logo-horizontal-on-light.svg" alt="OneRepMax" width="101" height="26"><img class="logo logo-dark" src="assets/logo-horizontal-on-dark.svg" alt="OneRepMax" width="101" height="26"></h1><div class="sub" id="sub">No workouts imported yet</div></div>
   <button class="iconbtn" id="menuBtn" type="button" aria-label="Menu" aria-controls="drawer"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
   <input type="file" id="file" accept=".csv,text/csv,text/comma-separated-values,text/plain" hidden>
 </div></header>

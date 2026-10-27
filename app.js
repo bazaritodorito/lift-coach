@@ -433,10 +433,10 @@ function renderPlan() {
 }
 
 function emptyView() {
-  return `<div class="empty"><h2>Import your workouts</h2>
+  return `<div class="empty"><img class="stack logo-light" src="assets/logo-stacked-on-light.svg" alt="OneRepMax"><img class="stack logo-dark" src="assets/logo-stacked-on-dark.svg" alt=""><h2>Import your workouts</h2>
     <p class="note">Everything stays on this phone.</p>
     <ol><li>In Hevy: <b>Profile → Settings → Export &amp; Import Data → Export Workouts</b>.</li>
-    <li>Share the file to <b>Lift Coach</b>, or save it and tap <b>Import CSV</b> here.</li></ol>
+    <li>Share the file to <b>OneRepMax</b>, or save it and tap <b>Import CSV</b> here.</li></ol>
     <div><button class="btn primary" type="button" data-import>Import CSV</button></div></div>`;
 }
 
@@ -467,8 +467,8 @@ function lineChart(pts, unit) {
     <text x="${m.l - 6}" y="${(Y(t) + 3.5).toFixed(1)}" text-anchor="end" font-size="10" fill="var(--muted)">${t}</text>`;
   s += `<text x="${m.l}" y="${H - 5}" font-size="10" fill="var(--muted)">${esc(wkLabel(pts[0][0]))}</text>
     <text x="${W - m.r}" y="${H - 5}" text-anchor="end" font-size="10" fill="var(--muted)">${esc(wkLabel(pts[pts.length - 1][0]))}</text>`;
-  s += `<polyline points="${pts.map(p => `${X(p[0]).toFixed(1)},${Y(p[1]).toFixed(1)}`).join(' ')}" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>`;
-  pts.forEach((p, i) => { s += `<circle cx="${X(p[0]).toFixed(1)}" cy="${Y(p[1]).toFixed(1)}" r="${i === pts.length - 1 ? 4.5 : 3}" fill="var(--accent)"/>`; });
+  s += `<polyline points="${pts.map(p => `${X(p[0]).toFixed(1)},${Y(p[1]).toFixed(1)}`).join(' ')}" fill="none" stroke="var(--brand-text)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>`;
+  pts.forEach((p, i) => { s += `<circle cx="${X(p[0]).toFixed(1)}" cy="${Y(p[1]).toFixed(1)}" r="${i === pts.length - 1 ? 4.5 : 3}" fill="var(--brand-text)"/>`; });
   const lp = pts[pts.length - 1];
   s += `<text x="${(X(lp[0]) + 8).toFixed(1)}" y="${(Y(lp[1]) + 4).toFixed(1)}" font-size="11" font-weight="700" fill="var(--fg)">${esc(lastLab)}</text>`;
   return s + '</svg>';
@@ -485,7 +485,7 @@ function barChart(values, weeks, opts = {}) {
   if (opts.target != null) s += `<line x1="${m.l}" x2="${W - m.r}" y1="${Y(opts.target).toFixed(1)}" y2="${Y(opts.target).toFixed(1)}" stroke="var(--fg)" stroke-opacity=".45" stroke-dasharray="4 4"/>`;
   values.forEach((v, i) => {
     const x = m.l + i * (bw + gap), y = Y(v), h = H - m.b - y;
-    const fill = opts.target == null ? 'var(--accent)' : v >= opts.target ? 'var(--accent)' : 'var(--bar)';
+    const fill = opts.target == null ? 'var(--brand-text)' : v >= opts.target ? 'var(--accent)' : 'var(--bar)';
     if (v > 0) s += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(1, h).toFixed(1)}" rx="${Math.min(4, bw / 2)}" fill="${fill}"/>`;
     if (v > 0 && bw >= 16) s += `<text x="${(x + bw / 2).toFixed(1)}" y="${(y - 4).toFixed(1)}" text-anchor="middle" font-size="10" fill="var(--muted)" paint-order="stroke" stroke="var(--panel)" stroke-width="3">${fmt(v)}</text>`;
     if (i % 3 === (n - 1) % 3) s += `<text x="${(x + bw / 2).toFixed(1)}" y="${H - 6}" text-anchor="middle" font-size="10" fill="var(--muted)">${esc(wkLabel(weeks[i]))}</text>`;
@@ -657,7 +657,7 @@ function renderMenu() {
     <div class="grp">Data</div>
     <button type="button" class="mitem" data-act="import"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg><span><span class="mt">Import workouts</span><span class="ms">${esc(impTxt)}</span></span></button>
     <button type="button" class="mitem" data-act="howto" aria-expanded="false"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></svg><span><span class="mt">How to export from Hevy</span><span class="ms">Profile › Settings › Export data</span></span></button>
-    <ol class="howto" id="howto" hidden><li>In Hevy, open <b>Profile</b> → ⚙ <b>Settings</b>.</li><li>Tap <b>Export &amp; Import Data</b> → <b>Export Workouts</b>.</li><li>Share the file to <b>Lift Coach</b>, or save it and use <b>Import workouts</b>.</li></ol>
+    <ol class="howto" id="howto" hidden><li>In Hevy, open <b>Profile</b> → ⚙ <b>Settings</b>.</li><li>Tap <b>Export &amp; Import Data</b> → <b>Export Workouts</b>.</li><li>Share the file to <b>OneRepMax</b>, or save it and use <b>Import workouts</b>.</li></ol>
     <div class="grp">Training</div>
     <div class="mrowx"><div class="mt">Barbell lifts</div>${seg('style', [['rep', 'Rep targets'], ['prilepin', 'Prilepin']], 'Progression style for barbell lifts')}<div class="ms">Accessories always use rep targets.</div></div>
     <div class="mrowx"><div class="mt">Next session</div>${seg('next', [['rotation', 'In rotation'], ['weekday', 'By weekday']], 'How the next session is chosen')}
@@ -665,7 +665,7 @@ function renderMenu() {
     <div class="mrowx"><div class="mt">Units</div>${seg('units', [['kg', 'kg'], ['lb', 'lb']], 'Weight units')}</div>
     </div>
     <button type="button" class="mitem danger" data-act="clear"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg><span class="mt" id="clearLbl">Clear data on this phone</span></button>
-    <div class="dfoot">Lift Coach · your data stays on this phone</div>`;
+    <div class="dfoot">OneRepMax · your data stays on this phone</div>`;
 }
 
 function openMenu(open) {
