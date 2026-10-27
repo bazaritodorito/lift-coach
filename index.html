@@ -161,6 +161,17 @@ h2:first-child { margin-top: 0; }
 .rep.over, .dot.over { background: var(--warn-soft); color: var(--warn); }
 .rep.plan { background: transparent; color: var(--fg); border: 1.5px dashed var(--zone); padding: 3.5px 0; }
 .dot.plan { background: transparent; border: 1.5px dashed var(--zone); }
+.back { display: inline-flex; align-items: center; gap: 4px; background: none; border: 0; padding: 10px 8px 10px 0; min-height: 44px; color: var(--brand-text); font-weight: 700; cursor: pointer; }
+.zt { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+.zr { display: grid; grid-template-columns: 5rem repeat(3, minmax(0, 1fr)); gap: 8px; align-items: center; padding: 11px 12px; border-radius: 12px; background: var(--panel); border: 1px solid var(--line); text-align: center; font-variant-numeric: tabular-nums; }
+.zr .zz { text-align: left; font-weight: 700; }
+.zr.zh { background: none; border: 0; padding-top: 0; padding-bottom: 0; font-size: .7rem; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+.zr.zh .zz { font-weight: 400; }
+.zr.hl { background: var(--zone-soft); border-color: var(--zone); }
+.zw { grid-column: 1 / -1; text-align: left; font-size: .75rem; color: var(--zone); margin-top: -2px; }
+.how { display: flex; gap: 14px; align-items: center; padding: 8px 0; }
+.how-v { flex: none; width: 96px; }
+.how p { margin: 0; font-size: .88rem; line-height: 1.4; }
 .tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 6px; }
 .tile .big { font-size: 1.9rem; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.1; }
 .tile .lbl { font-size: .78rem; color: var(--muted); }

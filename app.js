@@ -660,6 +660,7 @@ function renderMenu() {
     <ol class="howto" id="howto" hidden><li>In Hevy, open <b>Profile</b> → ⚙ <b>Settings</b>.</li><li>Tap <b>Export &amp; Import Data</b> → <b>Export Workouts</b>.</li><li>Share the file to <b>OneRepMax</b>, or save it and use <b>Import workouts</b>.</li></ol>
     <div class="grp">Training</div>
     <div class="mrowx"><div class="mt">Barbell lifts</div>${seg('style', [['rep', 'Rep targets'], ['prilepin', 'Prilepin']], 'Progression style for barbell lifts')}<div class="ms">Accessories always use rep targets.</div></div>
+    <button type="button" class="mitem" data-act="chart"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M3 14h18M9 9v11"/></svg><span style="flex:1"><span class="mt">Prilepin chart</span><span class="ms">Zones, reps per set and how to read a tile</span></span><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
     <div class="mrowx"><div class="mt">Next session</div>${seg('next', [['rotation', 'In rotation'], ['weekday', 'By weekday']], 'How the next session is chosen')}
       <div class="ms">${S.next === 'rotation' ? 'Follows your last workout. Name Hevy workouts Upper A, Lower A, Upper B, Lower B to keep it in step.' : 'Mon Upper A · Wed Lower A · Fri Upper B · Sun Lower B'}</div></div>
     <div class="mrowx"><div class="mt">Units</div>${seg('units', [['kg', 'kg'], ['lb', 'lb']], 'Weight units')}</div>
@@ -676,9 +677,37 @@ function openMenu(open) {
 
 function saveSettings() { store.set('lc_settings', JSON.stringify(S)); }
 
+let prevTab = 'next';
+function renderChart() {
+  const who = z => (A ? A.lifts.filter(l => l.active && PRILEPIN_LIFTS.has(l.ex) && prilepin(l).zone === z).map(l => l.ex.replace(' (Barbell)', '')) : []);
+  let h = `<button type="button" class="back" data-back><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>Back</button>
+    <h2>Prilepin's chart</h2><p class="note">How many reps to do in a session, based on how heavy the weight is.</p>
+    <div class="zt"><div class="zr zh"><span class="zz">% of 1RM</span><span>Reps / set</span><span>Optimal</span><span>Range</span></div>`;
+  for (const z of ZONES) {
+    const w = who(z);
+    h += `<div class="zr${w.length ? ' hl' : ''}"><span class="zz">${z.name}</span><span>${z.reps[0]}–${z.reps[1]}</span><span>${z.opt}</span><span>${z.total[0]}–${z.total[1]}</span>${w.length ? `<span class="zw">${esc(w.join(' · '))}</span>` : ''}</div>`;
+  }
+  h += `</div><p class="small">Highlighted zones show where your barbell lifts sit for their next session.</p>
+    <h2>Reading a tile</h2><div class="card">
+    <div class="how"><div class="how-v"><div class="pscale" style="width:100%"><div class="pseg on" style="left:30%;width:28%"></div><div class="pmark" style="left:52%"></div></div></div>
+      <p><b>Intensity.</b> Your weight as a % of estimated 1-rep max, and the zone it falls in.</p></div>
+    <div class="how"><div class="how-v"><div class="pmeter" style="width:100%"><div class="pband" style="left:40%;width:40%"></div><div class="pfill" style="width:62%;background:var(--accent)"></div><div class="popt" style="left:60%"></div></div></div>
+      <p><b>Reps in zone.</b> Total reps last time against the zone's range. The tick is the optimal total.</p></div>
+    <div class="how"><div class="how-v" style="display:flex;gap:4px"><span class="rep hit" style="flex:1;text-align:center">5</span><span class="rep over" style="flex:1;text-align:center">8</span><span class="rep plan" style="flex:1;text-align:center">6</span></div>
+      <p><b>Sets.</b> Green: reps inside the zone's per-set range. Amber: more than the zone calls for. Red: fewer. Dashed: next session's target.</p></div>
+    </div>
+    <h2>How weights move</h2><div class="card"><ul class="rules">
+    <li>Your estimated max is the best from the last 6 weeks.</li>
+    <li>Hit the optimal total with every set inside the zone's rep range, and the weight goes up one step.</li>
+    <li>Below 75% of your max, the weight is pulled up to about 77%.</li>
+    <li>The app never moves you into the 90%+ zone on its own.</li></ul></div>`;
+  return h;
+}
+
 function render() {
   const main = $('#main');
   $('#tabs').hidden = !A;
+  if (tab === 'chart') { main.innerHTML = renderChart(); $('#tabs').hidden = !A; document.querySelectorAll('#tabs [data-tab]').forEach(b => b.setAttribute('aria-selected', 'false')); return; }
   if (!A) { main.innerHTML = emptyView(); $('#sub').textContent = 'No workouts imported yet'; return; }
   $('#sub').textContent = `Data to ${A.latest.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })} · ${A.blockWorkouts} recent workouts`;
   main.innerHTML = tab === 'next' ? renderNext() : tab === 'lifts' ? renderLifts() : tab === 'balance' ? renderBalance() : tab === 'progress' ? renderProgress() : renderPlan();
@@ -711,6 +740,7 @@ $('#drawer').addEventListener('click', e => {
   const a = e.target.closest('[data-act]'); if (!a) return;
   const act = a.dataset.act;
   if (act === 'close') return openMenu(false);
+  if (act === 'chart') { if (tab !== 'chart') prevTab = tab; tab = 'chart'; openMenu(false); render(); window.scrollTo(0, 0); return; }
   if (act === 'import') { openMenu(false); return $('#file').click(); }
   if (act === 'howto') { const h = $('#howto'); h.hidden = !h.hidden; a.setAttribute('aria-expanded', String(!h.hidden)); return; }
   if (act === 'clear') {
@@ -722,6 +752,7 @@ $('#drawer').addEventListener('click', e => {
 $('#file').addEventListener('change', async e => { const f = e.target.files[0]; if (f) load(await f.text()); e.target.value = ''; });
 $('#main').addEventListener('click', e => {
   if (e.target.closest('[data-import]')) return $('#file').click();
+  if (e.target.closest('[data-back]')) { tab = prevTab; render(); window.scrollTo(0, 0); return; }
   const mu = e.target.closest('[data-muscle]'); if (mu) { progMuscle = mu.dataset.muscle; return render(); }
   const f = e.target.closest('[data-filter]'); if (f) { liftFilter = f.dataset.filter; return render(); }
   const l = e.target.closest('[data-lift]'); if (l) { openLift = openLift === l.dataset.lift ? null : l.dataset.lift; render(); }
