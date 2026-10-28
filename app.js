@@ -618,15 +618,24 @@ function intensityBars(l, next) {
   if (moved) h += `<div class="pmark" style="left:${pos(curPct)};opacity:.35"></div>`;
   h += `<div class="pmark" style="left:${pos(pct)}"></div></div>
       <div class="pticks"><span style="left:0;transform:none">0%</span>${[25, 50, 75].map(t => `<span style="left:${t}%">${t}</span>`).join('')}<span style="left:auto;right:0;transform:none">100%</span></div></div>`;
-  const max = z.total[1] * 1.25, pp = v => `${Math.min(100, v / max * 100).toFixed(1)}%`;
-  const st = zoneReps < z.total[0] ? 'bad' : zoneReps > z.total[1] ? 'warn' : 'accent';
-  h += `<div><div class="plab"><span>Reps in zone · last time</span><span class="pval" style="color:var(--${st})">${zoneReps} of ${z.total[0]}–${z.total[1]}</span></div>
-      <div class="pmeter" role="img" aria-label="${zoneReps} reps in zone last time; range ${z.total[0]} to ${z.total[1]}, optimal ${z.opt}">
-        <div class="pband" style="left:${pp(z.total[0])};width:calc(${pp(z.total[1])} - ${pp(z.total[0])})"></div>
-        <div class="pfill" style="width:${pp(zoneReps)};background:var(--${st})"></div>
-        <div class="popt" style="left:${pp(z.opt)}"></div></div>
-      <div class="pticks"><span style="left:${pp(z.total[0])}">${z.total[0]}</span><span style="left:${pp(z.opt)}">${z.opt}</span><span style="left:${pp(z.total[1])}">${z.total[1]}</span></div></div>`;
+  if (usesPrilepin(l)) h += zoneWindow(zoneReps, z);
   return `<div class="pbars">${h}</div>`;
+}
+
+/* Option C "zone window": the target total-reps range as a highlighted window on a track,
+   last session's total as a coloured pill, and a status badge. Prilepin barbell lifts only. */
+function zoneWindow(v, z) {
+  const [lo, hi] = z.total, opt = z.opt, mx = hi * 1.25;
+  const pc = x => Math.max(0, Math.min(100, x / mx * 100));
+  const s = !v ? 'none' : v < lo ? 'under' : v > hi ? 'over' : 'ok';
+  const S2 = { ok: ['accent', 'accent-soft', '✓ in zone'], over: ['warn', 'warn-soft', '▲ over'], under: ['bad', 'bad-soft', '▼ short'], none: ['muted', 'bg', 'lighter weight last time'] }[s];
+  const pin = Math.max(6, Math.min(94, pc(v)));
+  const lab = (x, txt, extra = '') => Math.abs(pc(x) - pin) < 7 && s !== 'none' ? '' : `<span style="left:${pc(x).toFixed(1)}%${extra}">${txt}</span>`;
+  return `<div><div class="zw-head"><span>Total reps last time</span><span class="zbadge" style="background:var(--${S2[1]});color:var(--${S2[0]})">${s === 'none' ? '—' : `${v} reps`} · ${S2[2]}</span></div>
+    <div class="zw" role="img" aria-label="${s === 'none' ? 'No sets at this intensity last time' : `${v} reps last time`}; target ${lo} to ${hi}, aim ${opt}">
+      <div class="zwin" style="left:${pc(lo).toFixed(1)}%;width:${(pc(hi) - pc(lo)).toFixed(1)}%"></div><div class="zopt" style="left:${pc(opt).toFixed(1)}%"></div>
+      ${s === 'none' ? '' : `<div class="zpin" style="left:${pin.toFixed(1)}%;background:var(--${S2[0]})">${v}</div>`}</div>
+    <div class="zlab">${lab(lo, lo)}${lab(opt, `aim ${opt}`, ';color:var(--accent)')}${lab(hi, hi)}</div></div>`;
 }
 
 function pTile(l, opts = {}) {
@@ -709,8 +718,8 @@ function renderChart() {
     <h2>Reading a tile</h2><div class="card">
     <div class="how"><div class="how-v"><div class="pscale" style="width:100%"><div class="pgrad"></div><div class="pfill2" style="clip-path:inset(0 21% 0 0 round 7px)"></div><div class="pzone" style="left:70%;width:10%"></div><div class="pmark" style="left:79%"></div></div></div>
       <p><b>Intensity.</b> Your weight as a % of estimated 1-rep max, on a 0–100% bar shaded from dark red at 0% to dark green at 100%. The dashed box marks its zone.</p></div>
-    <div class="how"><div class="how-v"><div class="pmeter" style="width:100%"><div class="pband" style="left:40%;width:40%"></div><div class="pfill" style="width:62%;background:var(--accent)"></div><div class="popt" style="left:60%"></div></div></div>
-      <p><b>Reps in zone.</b> Total reps last time against the zone's range. The tick is the optimal total.</p></div>
+    <div class="how"><div class="how-v"><div class="zw" style="margin:0"><div class="zwin" style="left:40%;width:40%"></div><div class="zopt" style="left:60%"></div><div class="zpin" style="left:68%;background:var(--accent);min-width:24px;height:20px;font-size:.75rem">20</div></div></div>
+      <p><b>Total reps last time.</b> The green window is the right amount of work at this weight; the pill is what you did. Barbell lifts in Prilepin mode only.</p></div>
     <div class="how"><div class="how-v" style="display:flex;gap:4px"><span class="rep hit" style="flex:1;text-align:center">5</span><span class="rep over" style="flex:1;text-align:center">8</span><span class="rep plan" style="flex:1;text-align:center">6</span></div>
       <p><b>Sets.</b> Green: reps inside the zone's per-set range. Amber: more than the zone calls for. Red: fewer. Dashed: next session's target.</p></div>
     </div>
