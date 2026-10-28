@@ -344,7 +344,8 @@ function renderNext() {
     const goal = l ? (l.status === 'ready' ? `${l.lo}–${l.hi}` : `${l.hi}`) : reps;
     h += `<div class="card xc"><div class="xc-top"><div class="ex">${esc(ex)}</div>${l && l.active ? badge(l) : tag ? `<span class="badge neutral">${esc(tag)}</span>` : ''}</div>
       <div class="today"><span class="today-kg">${esc(w.text)}</span><span class="today-x">${n} × ${esc(goal)}</span></div>
-      ${l ? setGrid(l, `Last · ${shortDate(l.last.day)}`) : ''}</div>`;
+      ${l ? intensityBars(l, l.active && l.status === 'ready' ? l.next : l.current) : ''}
+      ${l ? setGrid(l, `Last · ${shortDate(l.last.day)}`) : ''}</div>`
   }
   return h;
 }
@@ -382,6 +383,7 @@ function renderLifts() {
     h += `<div class="card xc lift${openLift === l.ex ? ' open' : ''}" data-lift="${esc(l.ex)}">
       <div class="xc-top"><div class="ex">${esc(l.ex)}</div>${badge(l)}</div>
       <div class="today"><span class="today-kg">${W(l.current)}</span><span class="today-x">${esc(l.muscle)} · ${l.lo}–${l.hi} reps</span></div>
+      ${intensityBars(l, l.current)}
       ${setGrid(l, `Last · ${shortDate(l.last.day)}`)}
       <div class="detail">${l.history.length > 1 ? spark(l.history) : ''}<div class="small">${esc(l.note)}</div></div>
       <div class="more" aria-hidden="true">${openLift === l.ex ? 'Less' : 'History'}</div></div>`;
@@ -598,6 +600,31 @@ function prilepin(l) {
 
 const pos = p => `${Math.max(0, Math.min(100, p * 100)).toFixed(1)}%`;
 
+
+/* Intensity (0–100% of estimated 1RM) and reps-in-zone bars, for any weighted lift at a given next weight. */
+function intensityBars(l, next) {
+  const tm = prilepin(l).tm, cur = l.current;
+  const pct = next / tm, curPct = cur / tm, z = zoneOf(pct);
+  const zoneReps = l.last.sets.filter(([w]) => zoneOf(w / tm) === z).reduce((a, s) => a + s[1], 0);
+  const pc = v => `${Math.round(v * 100)}%`;
+  const moved = Math.abs(next - cur) > 1e-9;
+  let h = `<div><div class="plab"><span>Intensity · ${z.name} zone</span><span class="pval" style="color:var(--fg)">${pc(pct)}${moved ? ` <span style="color:var(--accent)">${next > cur ? '↑' : '↓'} from ${pc(curPct)}</span>` : ''}</span></div>
+      <div class="pscale" role="img" aria-label="Intensity ${pc(pct)} of estimated 1-rep max, zone ${z.name}">
+      <div class="pgrad"></div><div class="pfill2" style="clip-path:inset(0 calc(100% - ${pos(pct)}) 0 0 round 7px)"></div><div class="pzone" style="left:${pos(z.seg[0] / 100)};width:calc(${pos(z.seg[1] / 100)} - ${pos(z.seg[0] / 100)})"></div>`;
+  if (moved) h += `<div class="pmark" style="left:${pos(curPct)};opacity:.35"></div>`;
+  h += `<div class="pmark" style="left:${pos(pct)}"></div></div>
+      <div class="pticks"><span style="left:0;transform:none">0%</span>${[25, 50, 75].map(t => `<span style="left:${t}%">${t}</span>`).join('')}<span style="left:auto;right:0;transform:none">100%</span></div></div>`;
+  const max = z.total[1] * 1.25, pp = v => `${Math.min(100, v / max * 100).toFixed(1)}%`;
+  const st = zoneReps < z.total[0] ? 'bad' : zoneReps > z.total[1] ? 'warn' : 'accent';
+  h += `<div><div class="plab"><span>Reps in zone · last time</span><span class="pval" style="color:var(--${st})">${zoneReps} of ${z.total[0]}–${z.total[1]}</span></div>
+      <div class="pmeter" role="img" aria-label="${zoneReps} reps in zone last time; range ${z.total[0]} to ${z.total[1]}, optimal ${z.opt}">
+        <div class="pband" style="left:${pp(z.total[0])};width:calc(${pp(z.total[1])} - ${pp(z.total[0])})"></div>
+        <div class="pfill" style="width:${pp(zoneReps)};background:var(--${st})"></div>
+        <div class="popt" style="left:${pp(z.opt)}"></div></div>
+      <div class="pticks"><span style="left:${pp(z.total[0])}">${z.total[0]}</span><span style="left:${pp(z.opt)}">${z.opt}</span><span style="left:${pp(z.total[1])}">${z.total[1]}</span></div></div>`;
+  return `<div class="pbars">${h}</div>`;
+}
+
 function pTile(l, opts = {}) {
   const P = prilepin(l), z = P.zone;
   const pc = v => `${Math.round(v * 100)}%`;
@@ -606,21 +633,8 @@ function pTile(l, opts = {}) {
     <div class="xc-top"><div class="ex">${esc(l.ex)}</div><span class="badge zone">${z.name}</span></div>
     <div class="phero"><div><div class="today-kg">${W(P.next)}</div><div class="small" style="margin-top:2px">${pc(P.pct)} of 1RM · est. ${W(Math.round(P.tm * 10) / 10)}</div></div>
       <div style="text-align:right"><div class="prx">${z.rx[0] * z.rx[1]} reps</div><div class="small" style="margin-top:2px">${z.rx[0]} × ${z.rx[1]} · optimal</div></div></div>
-    <div><div class="plab"><span>Intensity</span><span class="pval" style="color:var(--fg)">${pc(P.pct)}${moved ? ` <span style="color:var(--accent)">${P.next > P.cur ? '↑' : '↓'} from ${pc(P.curPct)}</span>` : ''}</span></div>
-      <div class="pscale" role="img" aria-label="Intensity ${pc(P.pct)}, zone ${z.name}">`;
-  h += `<div class="pgrad"></div><div class="pfill2" style="clip-path:inset(0 calc(100% - ${pos(P.pct)}) 0 0 round 7px)"></div><div class="pzone" style="left:${pos(z.seg[0] / 100)};width:calc(${pos(z.seg[1] / 100)} - ${pos(z.seg[0] / 100)})"></div>`;
-  if (moved) h += `<div class="pmark" style="left:${pos(P.curPct)};opacity:.35"></div>`;
-  h += `<div class="pmark" style="left:${pos(P.pct)}"></div></div>
-      <div class="pticks"><span style="left:0;transform:none">0%</span>${[25, 50, 75].map(t => `<span style="left:${t}%">${t}</span>`).join('')}<span style="left:auto;right:0;transform:none">100%</span></div></div>`;
-  // Reps in zone, last time
-  const max = z.total[1] * 1.25, pp = v => `${Math.min(100, v / max * 100).toFixed(1)}%`;
-  const st = P.zoneReps < z.total[0] ? 'bad' : P.zoneReps > z.total[1] ? 'warn' : 'accent';
-  h += `<div><div class="plab"><span>Reps in zone · last time</span><span class="pval" style="color:var(--${st})">${P.zoneReps} of ${z.total[0]}–${z.total[1]}</span></div>
-      <div class="pmeter" role="img" aria-label="${P.zoneReps} reps in zone last time; range ${z.total[0]} to ${z.total[1]}, optimal ${z.opt}">
-        <div class="pband" style="left:${pp(z.total[0])};width:calc(${pp(z.total[1])} - ${pp(z.total[0])})"></div>
-        <div class="pfill" style="width:${pp(P.zoneReps)};background:var(--${st})"></div>
-        <div class="popt" style="left:${pp(z.opt)}"></div></div>
-      <div class="pticks"><span style="left:${pp(z.total[0])}">${z.total[0]}</span><span style="left:${pp(z.opt)}">${z.opt}</span><span style="left:${pp(z.total[1])}">${z.total[1]}</span></div></div>`;
+`;
+  h += intensityBars(l, P.next);
   // Sets grid: last session, its weights, and next session's target
   const sets = l.last.sets, cols = Math.max(3, sets.length, z.rx[0]);
   h += `<div class="sets" style="grid-template-columns: 2.6rem repeat(${cols}, minmax(0, 1fr))"><span class="lab"></span>`;
