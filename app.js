@@ -330,23 +330,21 @@ function legend() {
 
 function renderNext() {
   const { p, when } = nextSession();
-  const ready = A.lifts.filter(isUp);
-  const under = A.balance.filter(b => b.avg < b.target);
-  let h = `<div class="tiles">
-    <div class="card tile"><div class="big">${ready.length}</div><div class="lbl">lifts ready to move up</div></div>
-    <div class="card tile"><div class="big">${under.length}</div><div class="lbl">muscle groups under target</div></div>
-  </div>`;
-  h += `<div class="sec-head"><h2>${when} · ${esc(p.session)}</h2><span class="small">${p.items.reduce((a, i) => a + i[1], 0)} sets</span></div>${legend()}`;
-  if (p.items.some(it => { const l = A.lifts.find(x => x.ex === it[0]); return l && l.active && usesPrilepin(l); })) h += pLegend();
+  let h = `<div class="sec-head"><h2>${when} · ${esc(p.session)}</h2></div><div class="card nlist">`;
+  let total = 0;
   for (const [ex, n, reps, tag, fb] of p.items) {
     const w = weightFor(ex, fb); const l = w.lift;
-    if (l && l.active && usesPrilepin(l)) { h += pTile(l); continue; }
-    const goal = l ? (l.status === 'ready' ? `${l.lo}–${l.hi}` : `${l.hi}`) : reps;
-    h += `<div class="card xc"><div class="xc-top"><div class="ex">${esc(ex)}</div>${l && l.active ? badge(l) : tag ? `<span class="badge neutral">${esc(tag)}</span>` : ''}</div>
-      <div class="today"><span class="today-kg">${esc(w.text)}</span><span class="today-x">${n} × ${esc(goal)}</span></div>
-      ${l ? intensityBars(l, l.active && l.status === 'ready' ? l.next : l.current) : ''}
-      ${l ? setGrid(l, `Last · ${shortDate(l.last.day)}`) : ''}</div>`
+    let sets = n, goal = reps;
+    if (l && l.active && usesPrilepin(l)) { const z = prilepin(l).zone; sets = z.rx[0]; goal = String(z.rx[1]); }
+    else if (l) goal = l.status === 'ready' ? `${l.lo}–${l.hi}` : `${l.hi}`;
+    total += sets;
+    const up = l && isUp(l);
+    const inner = `<span class="nl-main"><span class="nl-ex">${esc(ex)}</span><span class="nl-kg">${esc(w.text)}${up ? ' <span class="nl-up" aria-label="weight up">↑</span>' : ''}</span></span>
+      <span class="nl-sr">${sets} × ${esc(goal)}</span>`;
+    h += l ? `<button type="button" class="nl-row" data-goto="${esc(ex)}" aria-label="${esc(ex)}: ${esc(w.text)}, ${sets} sets of ${esc(goal)} reps. Open in Lifts">${inner}<svg class="nl-chev" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>`
+           : `<div class="nl-row">${inner}<span class="nl-chev"></span></div>`;
   }
+  h += `</div><p class="small" style="text-align:center">${total} working sets · tap an exercise for its detail</p>`;
   return h;
 }
 
@@ -769,6 +767,8 @@ $('#main').addEventListener('click', e => {
   if (e.target.closest('[data-back]')) { tab = prevTab; render(); window.scrollTo(0, 0); return; }
   const mu = e.target.closest('[data-muscle]'); if (mu) { progMuscle = mu.dataset.muscle; return render(); }
   const f = e.target.closest('[data-filter]'); if (f) { liftFilter = f.dataset.filter; return render(); }
+  const g = e.target.closest('[data-goto]');
+  if (g) { tab = 'lifts'; liftFilter = 'all'; openLift = g.dataset.goto; render(); const el = [...document.querySelectorAll('[data-lift]')].find(x => x.dataset.lift === openLift); if (el) el.scrollIntoView({ block: 'start' }); window.scrollBy(0, -70); return; }
   const l = e.target.closest('[data-lift]'); if (l) { openLift = openLift === l.dataset.lift ? null : l.dataset.lift; render(); }
 });
 $('#main').addEventListener('change', e => { if (e.target.id === 'liftSel') { progLift = e.target.value; render(); } });

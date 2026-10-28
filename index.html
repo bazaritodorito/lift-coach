@@ -175,6 +175,16 @@ h2:first-child { margin-top: 0; }
 .how { display: flex; gap: 14px; align-items: center; padding: 8px 0; }
 .how-v { flex: none; width: 96px; }
 .how p { margin: 0; font-size: .88rem; line-height: 1.4; }
+.nlist { padding: 4px 14px; gap: 0; }
+.nl-row { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 64px; padding: 10px 0; background: none; border: 0; border-bottom: 1px solid var(--line); text-align: left; color: var(--fg); cursor: pointer; }
+.nl-row:last-child { border-bottom: 0; }
+div.nl-row { cursor: default; }
+.nl-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.nl-ex { font-size: 1rem; font-weight: 600; line-height: 1.25; }
+.nl-kg { font-size: .9rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.nl-up { display: inline-block; background: var(--brand); color: var(--on-brand); font-weight: 800; border-radius: 999px; padding: 0 7px; margin-left: 4px; font-size: .8rem; }
+.nl-sr { font-size: 1.45rem; font-weight: 800; font-style: italic; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.nl-chev { width: 16px; flex: none; color: var(--muted); }
 .tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 6px; }
 .tile .big { font-size: 1.9rem; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.1; }
 .tile .lbl { font-size: .78rem; color: var(--muted); }
