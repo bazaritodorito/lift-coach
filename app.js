@@ -330,21 +330,28 @@ function legend() {
 
 function renderNext() {
   const { p, when } = nextSession();
-  let h = `<div class="sec-head"><h2>${when} · ${esc(p.session)}</h2></div><div class="card nlist">`;
+  let h = `<div class="sec-head"><h2>${when} · ${esc(p.session)}</h2></div>
+    <div class="key"><span><i class="dot plan"></i>Target reps</span></div>`;
   let total = 0;
   for (const [ex, n, reps, tag, fb] of p.items) {
     const w = weightFor(ex, fb); const l = w.lift;
-    let sets = n, goal = reps;
-    if (l && l.active && usesPrilepin(l)) { const z = prilepin(l).zone; sets = z.rx[0]; goal = String(z.rx[1]); }
-    else if (l) goal = l.status === 'ready' ? `${l.lo}–${l.hi}` : `${l.hi}`;
+    let sets = n, goal = reps, kg = null;
+    if (l && l.active && usesPrilepin(l)) { const P = prilepin(l); sets = P.zone.rx[0]; goal = String(P.zone.rx[1]); kg = P.next; }
+    else if (l) { goal = l.status === 'ready' ? `${l.lo}–${l.hi}` : `${l.hi}`; kg = l.active && l.status === 'ready' ? l.next : l.current; }
     total += sets;
     const up = l && isUp(l);
-    const inner = `<span class="nl-main"><span class="nl-ex">${esc(ex)}</span><span class="nl-kg">${esc(w.text)}${up ? ' <span class="nl-up" aria-label="weight up">↑</span>' : ''}</span></span>
+    const head = `<span class="nl-main"><span class="nl-ex">${esc(ex)}${up ? ' <span class="nl-up" aria-label="weight up">↑</span>' : ''}</span>${kg == null ? `<span class="nl-kg">${esc(w.text)}</span>` : ''}</span>
       <span class="nl-sr">${sets} × ${esc(goal)}</span>`;
-    h += l ? `<button type="button" class="nl-row" data-goto="${esc(ex)}" aria-label="${esc(ex)}: ${esc(w.text)}, ${sets} sets of ${esc(goal)} reps. Open in Lifts">${inner}<svg class="nl-chev" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>`
-           : `<div class="nl-row">${inner}<span class="nl-chev"></span></div>`;
+    h += `<div class="card nx">${l ? `<button type="button" class="nl-row" data-goto="${esc(ex)}" aria-label="${esc(ex)}: open in Lifts">${head}<svg class="nl-chev" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>` : `<div class="nl-row">${head}<span class="nl-chev"></span></div>`}`;
+    const cols = Math.max(3, sets);
+    h += `<div class="sets" style="grid-template-columns: 2.6rem repeat(${cols}, minmax(0, 1fr))"><span class="lab"></span>`;
+    for (let i = 0; i < cols; i++) h += `<span class="hd">${i < sets ? i + 1 : ''}</span>`;
+    if (kg != null) { h += `<span class="lab">${S.units}</span>`; for (let i = 0; i < cols; i++) h += `<span class="w">${i < sets ? fmt(wv(kg)) : ''}</span>`; }
+    h += `<span class="lab">${/ s$/.test(goal) ? 'time' : 'reps'}</span>`;
+    for (let i = 0; i < cols; i++) h += i < sets ? `<span class="rep plan">${esc(goal.replace(' / leg', ''))}</span>` : '<span></span>';
+    h += `</div>${/\/ leg/.test(goal) ? '<div class="small">Reps per leg</div>' : ''}</div>`;
   }
-  h += `</div><p class="small" style="text-align:center">${total} working sets · tap an exercise for its detail</p>`;
+  h += `<p class="small" style="text-align:center">${total} working sets · tap an exercise for its detail</p>`;
   return h;
 }
 
