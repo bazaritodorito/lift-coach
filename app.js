@@ -606,9 +606,9 @@ function pTile(l, opts = {}) {
     <div class="xc-top"><div class="ex">${esc(l.ex)}</div><span class="badge zone">${z.name}</span></div>
     <div class="phero"><div><div class="today-kg">${W(P.next)}</div><div class="small" style="margin-top:2px">${pc(P.pct)} of 1RM · est. ${W(Math.round(P.tm * 10) / 10)}</div></div>
       <div style="text-align:right"><div class="prx">${z.rx[0] * z.rx[1]} reps</div><div class="small" style="margin-top:2px">${z.rx[0]} × ${z.rx[1]} · optimal</div></div></div>
-    <div><div class="plab"><span>Intensity</span><span class="pval" style="color:var(--zone)">${pc(P.pct)}${moved ? ` <span style="color:var(--accent)">${P.next > P.cur ? '↑' : '↓'} from ${pc(P.curPct)}</span>` : ''}</span></div>
+    <div><div class="plab"><span>Intensity</span><span class="pval" style="color:var(--fg)">${pc(P.pct)}${moved ? ` <span style="color:var(--accent)">${P.next > P.cur ? '↑' : '↓'} from ${pc(P.curPct)}</span>` : ''}</span></div>
       <div class="pscale" role="img" aria-label="Intensity ${pc(P.pct)}, zone ${z.name}">`;
-  h += `<div class="pzone" style="left:${pos(z.seg[0] / 100)};width:calc(${pos(z.seg[1] / 100)} - ${pos(z.seg[0] / 100)})"></div><div class="pfill2" style="width:${pos(P.pct)}"></div>`;
+  h += `<div class="pgrad"></div><div class="pfill2" style="clip-path:inset(0 calc(100% - ${pos(P.pct)}) 0 0 round 7px)"></div><div class="pzone" style="left:${pos(z.seg[0] / 100)};width:calc(${pos(z.seg[1] / 100)} - ${pos(z.seg[0] / 100)})"></div>`;
   if (moved) h += `<div class="pmark" style="left:${pos(P.curPct)};opacity:.35"></div>`;
   h += `<div class="pmark" style="left:${pos(P.pct)}"></div></div>
       <div class="pticks"><span style="left:0;transform:none">0%</span>${[25, 50, 75].map(t => `<span style="left:${t}%">${t}</span>`).join('')}<span style="left:auto;right:0;transform:none">100%</span></div></div>`;
@@ -689,8 +689,8 @@ function renderChart() {
   }
   h += `</div><p class="small">Highlighted zones show where your barbell lifts sit for their next session.</p>
     <h2>Reading a tile</h2><div class="card">
-    <div class="how"><div class="how-v"><div class="pscale" style="width:100%"><div class="pzone" style="left:70%;width:10%"></div><div class="pfill2" style="width:79%"></div><div class="pmark" style="left:79%"></div></div></div>
-      <p><b>Intensity.</b> Your weight as a % of estimated 1-rep max, on a 0–100% bar. The faint band is the zone it falls in.</p></div>
+    <div class="how"><div class="how-v"><div class="pscale" style="width:100%"><div class="pgrad"></div><div class="pfill2" style="clip-path:inset(0 21% 0 0 round 7px)"></div><div class="pzone" style="left:70%;width:10%"></div><div class="pmark" style="left:79%"></div></div></div>
+      <p><b>Intensity.</b> Your weight as a % of estimated 1-rep max, on a 0–100% bar shaded from dark red at 0% to dark green at 100%. The dashed box marks its zone.</p></div>
     <div class="how"><div class="how-v"><div class="pmeter" style="width:100%"><div class="pband" style="left:40%;width:40%"></div><div class="pfill" style="width:62%;background:var(--accent)"></div><div class="popt" style="left:60%"></div></div></div>
       <p><b>Reps in zone.</b> Total reps last time against the zone's range. The tick is the optimal total.</p></div>
     <div class="how"><div class="how-v" style="display:flex;gap:4px"><span class="rep hit" style="flex:1;text-align:center">5</span><span class="rep over" style="flex:1;text-align:center">8</span><span class="rep plan" style="flex:1;text-align:center">6</span></div>

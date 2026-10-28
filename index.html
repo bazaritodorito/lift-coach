@@ -148,9 +148,10 @@ h2:first-child { margin-top: 0; }
 .prx { font-size: 1.35rem; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.1; }
 .plab { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; font-size: .7rem; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
 .pval { font-size: .78rem; font-weight: 700; letter-spacing: 0; text-transform: none; font-variant-numeric: tabular-nums; }
-.pscale { position: relative; height: 14px; background: var(--line); border-radius: 7px; }
-.pzone { position: absolute; top: 0; height: 14px; background: var(--zone); opacity: .25; }
-.pfill2 { position: absolute; left: 0; top: 0; height: 14px; border-radius: 7px; background: var(--zone); }
+.pscale { position: relative; height: 14px; background: var(--bg); border-radius: 7px; }
+.pgrad { position: absolute; inset: 0; border-radius: 7px; background: linear-gradient(90deg, #7f1d1d 0%, #166534 100%); opacity: .22; }
+.pfill2 { position: absolute; inset: 0; border-radius: 7px; background: linear-gradient(90deg, #7f1d1d 0%, #166534 100%); }
+.pzone { position: absolute; top: -2px; height: 18px; border: 1px dashed var(--fg); opacity: .5; border-radius: 4px; }
 .pmark { position: absolute; top: -4px; width: 4px; height: 22px; margin-left: -2px; border-radius: 2px; background: var(--fg); }
 .pticks { position: relative; height: 14px; margin-top: 4px; font-size: .64rem; color: var(--muted); font-variant-numeric: tabular-nums; }
 .pticks span { position: absolute; transform: translateX(-50%); }
