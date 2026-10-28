@@ -1,4 +1,4 @@
-# OneRepMax
+# OneRepMaximus
 
 An installable phone app (PWA) that reads a Hevy workouts export and shows:
 
@@ -10,7 +10,7 @@ An installable phone app (PWA) that reads a Hevy workouts export and shows:
 All the maths runs on the phone. Your workout data is never uploaded anywhere; it is kept in the browser's storage on your device.
 
 ## Updating your data
-In Hevy: Profile → Settings → Export & Import Data → Export Workouts. Then share the CSV to OneRepMax, or tap **Import CSV** in the app.
+In Hevy: Profile → Settings → Export & Import Data → Export Workouts. Then share the CSV to OneRepMaximus, or tap **Import CSV** in the app.
 
 ## Rules
 Double progression: when every working set at your top weight reaches the top of the exercise's rep range, add the smallest step (2 kg dumbbells, 2.5 kg barbell, one pin on a machine). Exercise rep ranges, muscle mapping and the weekly plan are at the top of `app.js`.

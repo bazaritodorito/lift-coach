@@ -439,10 +439,10 @@ function renderPlan() {
 }
 
 function emptyView() {
-  return `<div class="empty"><img class="stack logo-light" src="assets/logo-stacked-on-light.svg" alt="OneRepMax"><img class="stack logo-dark" src="assets/logo-stacked-on-dark.svg" alt=""><h2>Import your workouts</h2>
+  return `<div class="empty"><img class="stack logo-light" src="assets/logo-stacked-on-light.svg" alt="OneRepMaximus"><img class="stack logo-dark" src="assets/logo-stacked-on-dark.svg" alt=""><h2>Import your workouts</h2>
     <p class="note">Everything stays on this phone.</p>
     <ol><li>In Hevy: <b>Profile → Settings → Export &amp; Import Data → Export Workouts</b>.</li>
-    <li>Share the file to <b>OneRepMax</b>, or save it and tap <b>Import CSV</b> here.</li></ol>
+    <li>Share the file to <b>OneRepMaximus</b>, or save it and tap <b>Import CSV</b> here.</li></ol>
     <div><button class="btn primary" type="button" data-import>Import CSV</button></div></div>`;
 }
 
@@ -675,7 +675,7 @@ function renderMenu() {
     <div class="grp">Data</div>
     <button type="button" class="mitem" data-act="import"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg><span><span class="mt">Import workouts</span><span class="ms">${esc(impTxt)}</span></span></button>
     <button type="button" class="mitem" data-act="howto" aria-expanded="false"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></svg><span><span class="mt">How to export from Hevy</span><span class="ms">Profile › Settings › Export data</span></span></button>
-    <ol class="howto" id="howto" hidden><li>In Hevy, open <b>Profile</b> → ⚙ <b>Settings</b>.</li><li>Tap <b>Export &amp; Import Data</b> → <b>Export Workouts</b>.</li><li>Share the file to <b>OneRepMax</b>, or save it and use <b>Import workouts</b>.</li></ol>
+    <ol class="howto" id="howto" hidden><li>In Hevy, open <b>Profile</b> → ⚙ <b>Settings</b>.</li><li>Tap <b>Export &amp; Import Data</b> → <b>Export Workouts</b>.</li><li>Share the file to <b>OneRepMaximus</b>, or save it and use <b>Import workouts</b>.</li></ol>
     <button type="button" class="mitem" data-act="chart"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M3 14h18M9 9v11"/></svg><span style="flex:1"><span class="mt">Prilepin chart</span><span class="ms">Zones, reps per set and how to read a tile</span></span><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
     <div class="grp">Training</div>
     <div class="mrowx"><div class="mt">Barbell lifts</div>${seg('style', [['rep', 'Rep targets'], ['prilepin', 'Prilepin']], 'Progression style for barbell lifts')}<div class="ms">Accessories always use rep targets.</div></div>
@@ -684,7 +684,7 @@ function renderMenu() {
     <div class="mrowx"><div class="mt">Units</div>${seg('units', [['kg', 'kg'], ['lb', 'lb']], 'Weight units')}</div>
     </div>
     <button type="button" class="mitem danger" data-act="clear"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg><span class="mt" id="clearLbl">Clear data on this phone</span></button>
-    <div class="dfoot">OneRepMax · your data stays on this phone</div>`;
+    <div class="dfoot">OneRepMaximus · your data stays on this phone</div>`;
 }
 
 function openMenu(open) {

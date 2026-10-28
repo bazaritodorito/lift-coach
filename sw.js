@@ -1,4 +1,4 @@
-const VERSION = 'onerepmax-v16';
+const VERSION = 'onerepmax-v17';
 const SHELL = ['./', 'index.html', 'app.js', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png',
   'favicon.ico', 'favicon.svg', 'apple-touch-icon.png', 'assets/logo-horizontal-on-dark.svg', 'assets/logo-horizontal-on-light.svg',
   'assets/logo-stacked-on-dark.svg', 'assets/logo-stacked-on-light.svg',
