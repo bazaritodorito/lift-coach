@@ -340,8 +340,7 @@ function renderNext() {
     else if (l) { goal = l.status === 'ready' ? `${l.lo}–${l.hi}` : `${l.hi}`; kg = l.active && l.status === 'ready' ? l.next : l.current; }
     total += sets;
     const up = l && isUp(l);
-    const head = `<span class="nl-main"><span class="nl-ex">${esc(ex)}${up ? ' <span class="nl-up" aria-label="weight up">↑</span>' : ''}</span>${kg == null ? `<span class="nl-kg">${esc(w.text)}</span>` : ''}</span>
-      <span class="nl-sr">${sets} × ${esc(goal)}</span>`;
+    const head = `<span class="nl-main"><span class="nl-ex">${esc(ex)}${up ? ' <span class="nl-up" aria-label="weight up">↑</span>' : ''}</span>${kg == null ? `<span class="nl-kg">${esc(w.text)}</span>` : ''}</span>`;
     h += `<div class="card nx">${l ? `<button type="button" class="nl-row" data-goto="${esc(ex)}" aria-label="${esc(ex)}: open in Lifts">${head}<svg class="nl-chev" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>` : `<div class="nl-row">${head}<span class="nl-chev"></span></div>`}`;
     const cols = Math.max(3, sets);
     h += `<div class="sets" style="grid-template-columns: 2.6rem repeat(${cols}, minmax(0, 1fr))"><span class="lab"></span>`;
