@@ -5,6 +5,7 @@ An installable phone app (PWA) for logging your workouts. It shows:
 - **Next** – your next planned session with today's weights, including move-ups
 - **Lifts** – every recent lift: ready to move up, almost, or building, with its weight history
 - **Balance** – hard sets per week for each muscle group against a target
+- **Progress** – a calendar of the days you trained (tap a day to see the workout), strength, weekly sets, weight increases and consistency
 - **Plan** – a balanced 4-day upper/lower week
 
 All the maths runs on the phone. Your workout data is never uploaded anywhere; it is kept in the browser's storage on your device.

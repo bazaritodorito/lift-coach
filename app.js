@@ -266,7 +266,18 @@ function analyse(sets) {
   const byW = new Map();
   for (const s of sets) { if (!byW.has(+s.dt)) byW.set(+s.dt, { dt: s.dt, title: s.title, exs: new Set() }); byW.get(+s.dt).exs.add(s.ex); }
   const recent = [...byW.values()].sort((a, b) => b.dt - a.dt).slice(0, 12);
-  return { latest, workouts, blockWorkouts, weeks, balance, lifts, progress, recent, uncounted: [...uncounted] };
+  // Calendar: every workout by day, with its exercises and working sets.
+  const cal = {};
+  for (const s of [...sets].sort((a, b) => a.dt - b.dt || a.idx - b.idx)) {
+    const list = cal[s.day] = cal[s.day] || [];
+    let wk = list.find(w => +w.dt === +s.dt);
+    if (!wk) { wk = { dt: s.dt, title: s.title, wid: s.wid || null, ex: new Map(), mus: new Set() }; list.push(wk); }
+    if (!wk.ex.has(s.ex)) wk.ex.set(s.ex, []);
+    if (s.type === 'warmup' || s.type === 'warm up') continue;
+    wk.ex.get(s.ex).push([s.w, s.reps]);
+    for (const m of PRIMARY(s.ex)) wk.mus.add(m);
+  }
+  return { latest, cal, workouts, blockWorkouts, weeks, balance, lifts, progress, recent, uncounted: [...uncounted] };
 }
 
 /* ---------- Rendering ---------- */
@@ -655,7 +666,7 @@ function restoreCSV(text) {
 let hevySets = [];
 function logSets() {
   return LOG.flatMap(wk => { const dt = new Date(wk.start);
-    return wk.ex.flatMap(e => e.sets.map((s, j) => ({ title: wk.title, dt, day: dayKey(dt), ex: e.name, type: s.type === 'warmup' ? 'warmup' : 'normal', w: s.w, reps: s.reps, idx: j }))); });
+    return wk.ex.flatMap(e => e.sets.map((s, j) => ({ title: wk.title, dt, day: dayKey(dt), ex: e.name, type: s.type === 'warmup' ? 'warmup' : 'normal', w: s.w, reps: s.reps, idx: j, wid: wk.id }))); });
 }
 function rebuild() {
   const mine = logSets(), days = new Set(mine.map(s => s.day));
@@ -728,11 +739,51 @@ function miniBars(values, target) {
   return s + `<line x1="0" x2="${W}" y1="${ty.toFixed(1)}" y2="${ty.toFixed(1)}" stroke="var(--fg)" stroke-opacity=".5" stroke-dasharray="2 2"/></svg>`;
 }
 
+/* Calendar of days trained (past only, nothing scheduled). Follows the muscle filter. */
+let calMonth = null, calDay = null;
+function renderCalendar(mus) {
+  const today = new Date(), thisM = new Date(today.getFullYear(), today.getMonth(), 1);
+  if (!calMonth) calMonth = thisM;
+  const days = Object.keys(A.cal).sort(), firstM = days.length ? (d => new Date(d.getFullYear(), d.getMonth(), 1))(fromKey(days[0])) : thisM;
+  const hit = k => (A.cal[k] || []).some(w => mus === 'All' || w.mus.has(mus));
+  const y = calMonth.getFullYear(), m = calMonth.getMonth(), nDays = new Date(y, m + 1, 0).getDate(), lead = (calMonth.getDay() + 6) % 7;
+  const monthKeys = Array.from({ length: nDays }, (_, i) => dayKey(new Date(y, m, i + 1)));
+  const count = monthKeys.filter(hit).length;
+  const canPrev = calMonth > firstM, canNext = calMonth < thisM;
+  const arrow = (dir, ok, d) => `<button type="button" class="iconbtn cal-nav" data-cal="${dir}"${ok ? '' : ' disabled'} aria-label="${dir === 'prev' ? 'Previous' : 'Next'} month"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${d}"/></svg></button>`;
+  let h = `<div class="sec-head"><h2>Calendar</h2><span class="small">${count} workout day${count === 1 ? '' : 's'}${mus === 'All' ? '' : ` with ${mus.toLowerCase()}`}</span></div>
+    <div class="card cal"><div class="cal-head">${arrow('prev', canPrev, 'M15 6l-6 6 6 6')}<b>${calMonth.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })}</b>${arrow('next', canNext, 'M9 6l6 6-6 6')}</div>
+    <div class="cal-grid" role="grid">${['M', 'T', 'W', 'T', 'F', 'S', 'S'].map(d => `<span class="cal-dow">${d}</span>`).join('')}`;
+  for (let i = 0; i < lead; i++) h += '<span></span>';
+  const tk = dayKey(today);
+  monthKeys.forEach((k, i) => {
+    const on = hit(k), future = k > tk;
+    const cls = ['cal-d', on && 'on', k === tk && 'today', k === calDay && 'sel', future && 'fut'].filter(Boolean).join(' ');
+    h += on ? `<button type="button" class="${cls}" data-day="${k}" aria-pressed="${k === calDay}" aria-label="${esc(shortDate(k))}: trained">${i + 1}</button>` : `<span class="${cls}">${i + 1}</span>`;
+  });
+  h += '</div>';
+  if (calDay && hit(calDay) && monthKeys.includes(calDay)) {
+    h += `<div class="cal-detail"><div class="small" style="margin:0 0 6px">${esc(fromKey(calDay).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' }))}</div>`;
+    for (const w of A.cal[calDay]) {
+      h += `<div class="cal-wk"><div class="cal-wt"><b>${esc(w.title || 'Workout')}</b>${w.wid && LOG.some(x => x.id === w.wid) ? `<button type="button" class="btn" data-edit="${esc(w.wid)}">Edit</button>` : '<span class="small" style="margin:0">Hevy</span>'}</div>`;
+      for (const [ex, ss] of w.ex) {
+        if (!ss.length) continue;
+        const txt = ss.map(([wt, r]) => wt ? `${fmt(wv(wt))}×${r ?? '—'}` : `${r ?? '✓'}`).join(' · ');
+        h += `<div class="cal-ex"><span>${esc(ex)}</span><span class="small" style="margin:0">${esc(txt)}</span></div>`;
+      }
+      h += '</div>';
+    }
+    h += '</div>';
+  } else if (count) h += `<p class="small" style="text-align:center;margin-bottom:0">Tap a highlighted day to see what you did.</p>`;
+  return h + '</div>';
+}
+
 function renderProgress() {
   const P = A.progress, mus = progMuscle;
   let h = `<div class="chips" role="group" aria-label="Muscle group">`;
   for (const g of ['All', ...GROUPS]) h += `<button type="button" data-muscle="${g}" aria-pressed="${mus === g}">${g}</button>`;
   h += '</div>';
+  h += renderCalendar(mus);
 
   // 1. Strength
   const lifts = A.lifts.filter(l => l.e1rm.length >= 2 && (mus === 'All' || PRIMARY(l.ex).includes(mus)))
@@ -1017,6 +1068,10 @@ $('#main').addEventListener('click', e => {
     LOG = LOG.filter(w => w.id !== dl.dataset.del); saveLog(); rebuild(); render(); return toast('Workout deleted');
   }
   if (e.target.closest('[data-back]')) { tab = prevTab; render(); window.scrollTo(0, 0); return; }
+  const cb = e.target.closest('[data-cal]');
+  if (cb && !cb.disabled) { calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth() + (cb.dataset.cal === 'prev' ? -1 : 1), 1); calDay = null; const y = window.scrollY; render(); window.scrollTo(0, y); return; }
+  const dd = e.target.closest('[data-day]');
+  if (dd) { calDay = calDay === dd.dataset.day ? null : dd.dataset.day; const y = window.scrollY; render(); window.scrollTo(0, y); return; }
   const mu = e.target.closest('[data-muscle]'); if (mu) { progMuscle = mu.dataset.muscle; return render(); }
   const f = e.target.closest('[data-filter]'); if (f) { liftFilter = f.dataset.filter; return render(); }
   const g = e.target.closest('[data-goto]');
