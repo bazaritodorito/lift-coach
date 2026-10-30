@@ -128,7 +128,7 @@ function parseDate(s) {
 }
 
 /* ---------- Analysis ---------- */
-function analyse(text) {
+function parseHevy(text) {
   const rows = parseCSV(text);
   if (rows.length < 2) throw new Error('That file has no rows.');
   const head = rows[0].map(h => h.trim().toLowerCase());
@@ -149,6 +149,12 @@ function analyse(text) {
     sets.push({ title: iTitle >= 0 ? (r[iTitle] || '').trim() : '', dt, day: dayKey(dt), ex: (r[iEx] || '').trim(), type, w, reps: isNaN(reps) ? null : reps, idx: iIdx >= 0 ? +r[iIdx] || 0 : 0 });
   }
   if (!sets.length) throw new Error('No sets could be read from that file.');
+  return sets;
+}
+
+/* Everything below works from one list of sets: Hevy history plus workouts logged in the app. */
+function analyse(sets) {
+  if (!sets.length) return null;
   const latest = new Date(Math.max(...sets.map(s => s.dt)));
   const workouts = new Set(sets.map(s => +s.dt)).size;
   // Only the current block of training: last 120 days before the latest workout.
@@ -276,6 +282,7 @@ function weightFor(ex, fallback) {
 }
 
 function nextSession() {
+  if (!A) return { p: PLAN[0], when: 'Next session' };
   if (S.next === 'rotation') {
     for (const w of A.recent) {
       const i = PLAN.findIndex(p => p.session.toLowerCase() === w.title.toLowerCase() ||
@@ -328,16 +335,31 @@ function legend() {
   return `<div class="key"><span><i class="dot hit"></i>Hit target</span><span><i class="dot miss"></i>Missed</span><span><i class="dot ramp"></i>Lighter set</span></div>`;
 }
 
+/* Today's target for one plan item: number of sets, rep goal (text) and weight in kg (or null). */
+function target(ex, n, reps, fb) {
+  const l = A ? A.lifts.find(x => x.ex === ex) : null;
+  let sets = n, goal = reps, kg = null;
+  if (l && l.active && usesPrilepin(l)) { const P = prilepin(l); sets = P.zone.rx[0]; goal = String(P.zone.rx[1]); kg = P.next; }
+  else if (l) { goal = l.status === 'ready' ? `${l.lo}–${l.hi}` : `${l.hi}`; kg = l.active && l.status === 'ready' ? l.next : l.current; }
+  else if (fb) { const m = fb.match(/(\d+(?:\.\d+)?)\s*kg/); if (m) kg = +m[1]; }
+  return { sets, goal, kg, lift: l };
+}
+
+function startCard(p) {
+  if (active) return `<button type="button" class="card resume" data-lg="open"><span><b>Workout in progress</b><span class="small">${esc(active.title || 'Workout')} · ${doneCount(active)} sets logged</span></span><span class="btn primary">Resume</span></button>`;
+  return `<div class="startbar"><button type="button" class="btn primary bigbtn" data-start="${esc(p.session)}">Start ${esc(p.session)}</button>
+    <div class="chips startchips" role="group" aria-label="Start a different workout">${PLAN.filter(x => x !== p).map(x => `<button type="button" data-start="${esc(x.session)}">${esc(x.session)}</button>`).join('')}<button type="button" data-start="">Empty</button></div></div>`;
+}
+
 function renderNext() {
   const { p, when } = nextSession();
-  let h = `<div class="sec-head"><h2>${when} · ${esc(p.session)}</h2></div>
+  let h = startCard(p) + `<div class="sec-head"><h2>${when} · ${esc(p.session)}</h2></div>
     <div class="key"><span><i class="dot plan"></i>Target reps</span></div>`;
   let total = 0;
   for (const [ex, n, reps, tag, fb] of p.items) {
-    const w = weightFor(ex, fb); const l = w.lift;
-    let sets = n, goal = reps, kg = null;
-    if (l && l.active && usesPrilepin(l)) { const P = prilepin(l); sets = P.zone.rx[0]; goal = String(P.zone.rx[1]); kg = P.next; }
-    else if (l) { goal = l.status === 'ready' ? `${l.lo}–${l.hi}` : `${l.hi}`; kg = l.active && l.status === 'ready' ? l.next : l.current; }
+    const w = weightFor(ex, fb);
+    const { sets, goal, kg: kg0, lift: l } = target(ex, n, reps);
+    const kg = l ? kg0 : null;
     total += sets;
     const up = l && isUp(l);
     const head = `<span class="nl-main"><span class="nl-ex">${esc(ex)}${up ? ' <span class="nl-up" aria-label="weight up">↑</span>' : ''}</span>${kg == null ? `<span class="nl-kg">${esc(w.text)}</span>` : ''}</span>`;
@@ -417,7 +439,7 @@ function renderBalance() {
 }
 
 function renderPlan() {
-  let h = `<h2>Your balanced week</h2><p class="note">Upper / lower, each muscle twice a week${S.next === 'rotation' ? ', done in order' : ''}. Weights update every time you import.</p>`;
+  let h = `<h2>Your balanced week</h2><p class="note">Upper / lower, each muscle twice a week${S.next === 'rotation' ? ', done in order' : ''}. Weights update every time you log a workout.</p>`;
   for (const d of PLAN) {
     const isNext = nextSession().p === d;
     h += `<div class="card"><div class="dayhead"><b>${S.next === 'rotation' ? '' : `${DAYNAME[d.day]} · `}${esc(d.session)}${isNext ? ' <span class="pill ready">Next</span>' : ''}</b><span class="small" style="margin:0">${d.items.reduce((a, i) => a + i[1], 0)} sets</span></div>`;
@@ -434,16 +456,210 @@ function renderPlan() {
     <li>When <b>every</b> working set hits the top of the range, add the smallest step: 2 kg dumbbells, 2.5 kg barbell, one pin on a machine.</li>
     <li>Reps drop to the bottom of the range at the new weight. That's normal; build back up.</li>
     <li>Leave 1–2 reps in reserve. If a lift stalls for 3+ sessions, drop 10% and build back up.</li>
-    <li>Log warm-ups as warm-up sets in Hevy so they stay out of the numbers.</li></ul></div>`;
+    <li>Mark warm-ups as warm-up sets (tap the set number while logging) so they stay out of the numbers.</li></ul></div>`;
   return h;
 }
 
 function emptyView() {
-  return `<div class="empty"><img class="stack logo-light" src="assets/logo-stacked-on-light.svg" alt="OneRepMaximus"><img class="stack logo-dark" src="assets/logo-stacked-on-dark.svg" alt=""><h2>Import your workouts</h2>
-    <p class="note">Everything stays on this phone.</p>
-    <ol><li>In Hevy: <b>Profile → Settings → Export &amp; Import Data → Export Workouts</b>.</li>
-    <li>Share the file to <b>OneRepMaximus</b>, or save it and tap <b>Import CSV</b> here.</li></ol>
-    <div><button class="btn primary" type="button" data-import>Import CSV</button></div></div>`;
+  return `<div class="empty"><img class="stack logo-light" src="assets/logo-stacked-on-light.svg" alt="OneRepMaximus"><img class="stack logo-dark" src="assets/logo-stacked-on-dark.svg" alt=""><h2>Log your first workout</h2>
+    <p class="note">Tick off sets as you go. Everything stays on this phone.</p>
+    ${startCard(PLAN[0])}
+    <p class="note" style="margin-top:22px">Got history in Hevy? Import it once so your weights and move-up calls start from where you are.</p>
+    <div><button class="btn" type="button" data-import>Import Hevy CSV</button></div></div>`;
+}
+
+/* ---------- Workout logger ---------- */
+// Logged workouts: [{ id, title, start, end, ex: [{ name, sets: [{ w (kg|null), reps, secs, type }] }] }]
+// The workout in progress lives in its own key so it survives the app being closed mid-session.
+let LOG = [], active = null, lgTick = null, lgArm = {};
+try { LOG = JSON.parse(store.get('orm_log') || '[]'); } catch (e) { LOG = []; }
+try { active = JSON.parse(store.get('orm_active') || 'null'); } catch (e) { active = null; }
+const saveLog = () => store.set('orm_log', JSON.stringify(LOG));
+const saveActive = () => active ? store.set('orm_active', JSON.stringify(active)) : (() => { try { localStorage.removeItem('orm_active'); } catch (e) { /* */ } })();
+const toKg = v => { const n = parseFloat(String(v).replace(',', '.')); return isNaN(n) ? null : Math.round((S.units === 'lb' ? n * 0.45359237 : n) * 1000) / 1000; };
+const isTimed = (name, goal) => / s$/.test(goal || '') || /plank|hold|hang/i.test(name);
+const setCounts = s => s.done || s.reps !== '' && s.reps != null;
+const doneCount = a => a.items.reduce((n, it) => n + it.sets.filter(setCounts).length, 0);
+const ALL_EX = [...Object.keys(EX), ...CORE].sort();
+const mmss = ms => { const t = Math.max(0, Math.floor(ms / 1000)); const h = Math.floor(t / 3600), m = Math.floor(t / 60) % 60, s = t % 60; return h ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`; };
+
+function newItem(name, n, goal, kg) {
+  const timed = isTimed(name, goal);
+  const ph = parseInt(String(goal || '').match(/\d+/) || '', 10);
+  return { name, goal: goal || '', timed, ph: isNaN(ph) ? '' : ph,
+    sets: Array.from({ length: n || 3 }, () => ({ w: kg == null ? null : kg, reps: '', type: 'normal', done: false })) };
+}
+
+function startWorkout(session) {
+  const p = PLAN.find(x => x.session === session);
+  active = { title: session || 'Workout', start: new Date().toISOString(), items: [], rest: null };
+  if (p) for (const [ex, n, reps, , fb] of p.items) { const t = target(ex, n, reps, fb); active.items.push(newItem(ex, t.sets, t.goal, t.kg)); }
+  saveActive(); tab = 'log'; render(); window.scrollTo(0, 0);
+  if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+}
+
+function editWorkout(id) {
+  if (active) return toast('Finish or discard the workout in progress first');
+  const wk = LOG.find(w => w.id === id); if (!wk) return;
+  active = { editId: wk.id, title: wk.title, start: wk.start, end: wk.end, rest: null,
+    items: wk.ex.map(e => ({ name: e.name, goal: '', timed: e.sets.some(s => s.secs != null), ph: '',
+      sets: e.sets.map(s => ({ w: s.w, reps: s.secs != null ? s.secs : s.reps, type: s.type || 'normal', done: true })) })) };
+  saveActive(); tab = 'log'; render(); window.scrollTo(0, 0);
+}
+
+function finishWorkout() {
+  const ex = active.items.map(it => ({ name: it.name, sets: it.sets.filter(setCounts).map(s => {
+    const n = s.reps === '' || s.reps == null ? (it.ph || null) : parseInt(s.reps, 10);
+    return { w: s.w, reps: it.timed ? null : n, secs: it.timed ? n : null, type: s.type };
+  }) })).filter(e => e.sets.length);
+  if (!ex.length) return toast('Tick at least one set first');
+  const wk = { id: active.editId || `w${Date.now().toString(36)}`, title: (active.title || 'Workout').trim() || 'Workout', start: active.start,
+    end: active.editId ? active.end : new Date().toISOString(), ex };
+  const i = LOG.findIndex(w => w.id === wk.id);
+  if (i >= 0) LOG[i] = wk; else LOG.push(wk);
+  LOG.sort((a, b) => a.start.localeCompare(b.start));
+  if (!saveLog()) toast('This phone would not save the workout. Export a backup from the menu.');
+  const edited = !!active.editId; active = null; saveActive(); rebuild();
+  tab = edited ? 'history' : 'next'; render(); window.scrollTo(0, 0);
+  const n = ex.reduce((a, e) => a + e.sets.length, 0);
+  toast(edited ? 'Workout updated' : `Saved · ${n} sets`);
+}
+
+function lastLine(name) {
+  const l = A && A.lifts.find(x => x.ex === name);
+  if (!l) return '';
+  return `Last ${esc(shortDate(l.last.day))}: ${l.last.sets.map(([w, r]) => `${fmt(wv(w))}×${r}`).join(' · ')}`;
+}
+
+function renderLog() {
+  const a = active;
+  const started = new Date(a.start);
+  let h = `<div class="lg-top"><input class="lg-title" id="lgTitle" value="${esc(a.title)}" aria-label="Workout name" autocomplete="off">
+    <div class="lg-clock">${a.editId ? `<span>${esc(started.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }))}</span>`
+      : `<span><span class="lg-cl">Time</span> <b id="lgTime">${mmss(Date.now() - started)}</b></span><span id="lgRestWrap"${a.rest ? '' : ' hidden'}><span class="lg-cl">Rest</span> <b id="lgRest">${a.rest ? mmss(Date.now() - a.rest) : ''}</b></span>`}</div></div>`;
+  a.items.forEach((it, i) => {
+    const sub = [it.goal && `Target ${it.goal}${it.timed && !/ s$/.test(it.goal) ? ' s' : ''}`, lastLine(it.name)].filter(Boolean).join(' · ');
+    h += `<div class="card lg-ex"><div class="xc-top"><div class="ex">${esc(it.name)}</div>
+      <button type="button" class="lg-x" data-lg="rmex" data-i="${i}" aria-label="Remove ${esc(it.name)}">×</button></div>
+      ${sub ? `<div class="small" style="margin:2px 0 8px">${sub}</div>` : ''}
+      <div class="lg-grid"><span class="lab">Set</span><span class="lab">${S.units}</span><span class="lab">${it.timed ? 'Sec' : 'Reps'}</span><span></span>`;
+    let k = 0;
+    it.sets.forEach((s, j) => {
+      const wu = s.type === 'warmup'; if (!wu) k++;
+      h += `<button type="button" class="lg-n${wu ? ' wu' : ''}" data-lg="type" data-i="${i}" data-j="${j}" aria-label="Set ${wu ? 'warm-up' : k}, tap to toggle warm-up">${wu ? 'W' : k}</button>
+        <input class="lg-in" data-f="w" data-i="${i}" data-j="${j}" inputmode="decimal" autocomplete="off" value="${s.w == null ? '' : fmt(wv(s.w))}" placeholder="—" aria-label="Weight, set ${j + 1}">
+        <input class="lg-in" data-f="reps" data-i="${i}" data-j="${j}" inputmode="numeric" autocomplete="off" value="${esc(s.reps ?? '')}" placeholder="${esc(it.ph)}" aria-label="${it.timed ? 'Seconds' : 'Reps'}, set ${j + 1}">
+        <button type="button" class="lg-ok" data-lg="done" data-i="${i}" data-j="${j}" aria-pressed="${!!s.done}" aria-label="Set ${j + 1} done"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button>`;
+    });
+    h += `</div><div class="lg-acts"><button type="button" class="btn" data-lg="addset" data-i="${i}">+ Set</button>${it.sets.length ? `<button type="button" class="btn" data-lg="rmset" data-i="${i}">− Set</button>` : ''}</div></div>`;
+  });
+  h += `<div class="card lg-add"><input class="sel" id="lgAdd" list="exlist" placeholder="Add an exercise…" autocomplete="off" aria-label="Exercise name">
+    <button type="button" class="btn" data-lg="addex">Add</button><datalist id="exlist">${ALL_EX.map(x => `<option value="${esc(x)}">`).join('')}</datalist></div>
+    <button type="button" class="btn primary bigbtn" data-lg="finish">${a.editId ? 'Save changes' : 'Finish workout'}</button>
+    <button type="button" class="btn ghost bigbtn" data-lg="discard" id="lgDiscard">${a.editId ? 'Cancel edit' : 'Discard workout'}</button>
+    <p class="small" style="text-align:center">Tap a set number to mark it as a warm-up. Sets with reps typed in count even if not ticked.</p>`;
+  return h;
+}
+
+function lgClock() {
+  clearInterval(lgTick);
+  if (tab !== 'log' || !active || active.editId) return;
+  lgTick = setInterval(() => {
+    const t = $('#lgTime'); if (!t || !active) return clearInterval(lgTick);
+    t.textContent = mmss(Date.now() - new Date(active.start));
+    if (active.rest) { $('#lgRestWrap').hidden = false; $('#lgRest').textContent = mmss(Date.now() - active.rest); }
+  }, 1000);
+}
+
+function lgAction(b) {
+  const act = b.dataset.lg, i = +b.dataset.i, j = +b.dataset.j;
+  if (act === 'open') { tab = 'log'; render(); window.scrollTo(0, 0); return; }
+  const it = active && active.items[i];
+  const armed = key => { if (Date.now() - (lgArm[key] || 0) < 3500) { lgArm = {}; return true; } lgArm = { [key]: Date.now() }; return false; };
+  if (act === 'done') {
+    const s = it.sets[j]; s.done = !s.done;
+    if (s.done && (s.reps === '' || s.reps == null) && it.ph !== '') s.reps = String(it.ph);
+    if (s.done && s.type !== 'warmup') active.rest = Date.now();
+  } else if (act === 'type') it.sets[j].type = it.sets[j].type === 'warmup' ? 'normal' : 'warmup';
+  else if (act === 'addset') { const prev = it.sets[it.sets.length - 1]; it.sets.push({ w: prev ? prev.w : null, reps: '', type: 'normal', done: false }); }
+  else if (act === 'rmset') it.sets.pop();
+  else if (act === 'rmex') {
+    if (it.sets.some(s => s.done) && !armed(`rm${i}`)) return toast('Tap × again to remove it and its sets');
+    active.items.splice(i, 1);
+  } else if (act === 'addex') {
+    const name = ($('#lgAdd').value || '').trim(); if (!name) return $('#lgAdd').focus();
+    const hit = ALL_EX.find(x => x.toLowerCase() === name.toLowerCase()) || name;
+    const t = target(hit, 3, EX[hit] ? `${EX[hit][0]}–${EX[hit][1]}` : '');
+    active.items.push(newItem(hit, t.sets, t.goal, t.kg));
+  } else if (act === 'finish') return finishWorkout();
+  else if (act === 'discard') {
+    if (!armed('discard')) { $('#lgDiscard').textContent = active.editId ? 'Tap again to cancel' : 'Tap again to discard'; return; }
+    const edited = !!active.editId; active = null; saveActive(); tab = edited ? 'history' : 'next'; render(); window.scrollTo(0, 0);
+    return toast(edited ? 'No changes saved' : 'Workout discarded');
+  }
+  saveActive();
+  const y = window.scrollY; render(); window.scrollTo(0, y);
+  if (act === 'addex') { const all = document.querySelectorAll('.lg-ex'); if (all.length) all[all.length - 1].scrollIntoView({ block: 'center' }); }
+}
+
+function renderHistory() {
+  let h = `<button type="button" class="back" data-back><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>Back</button>
+    <h2>Workout log</h2><p class="note">Workouts logged in this app. Tap one to edit it.</p>`;
+  if (!LOG.length) h += '<p class="note">Nothing logged yet.</p>';
+  for (const wk of [...LOG].reverse()) {
+    const d = new Date(wk.start), n = wk.ex.reduce((a, e) => a + e.sets.filter(s => s.type !== 'warmup').length, 0);
+    const mins = wk.end ? Math.round((new Date(wk.end) - d) / 60000) : null;
+    h += `<div class="card lg-hist"><button type="button" class="lg-hrow" data-edit="${esc(wk.id)}"><span class="grow"><b>${esc(wk.title)}</b>
+      <span class="small">${esc(d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }))} · ${n} sets${mins && mins < 600 ? ` · ${mins} min` : ''}</span>
+      <span class="small">${esc(wk.ex.map(e => e.name.replace(/ \((Barbell|Dumbbell|Machine|Cable)\)/, '')).join(', '))}</span></span>
+      <svg class="nl-chev" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
+      <button type="button" class="lg-del" data-del="${esc(wk.id)}">Delete</button></div>`;
+  }
+  return h;
+}
+
+/* Backup: Hevy-style CSV (opens in a spreadsheet, and imports back into this app). */
+const CSV_HEAD = ['title', 'start_time', 'end_time', 'description', 'exercise_title', 'superset_id', 'exercise_notes', 'set_index', 'set_type', 'weight_kg', 'reps', 'distance_km', 'duration_seconds', 'rpe', 'orm_workout_id'];
+function hevyTime(iso) { const d = new Date(iso); return `${d.getDate()} ${d.toLocaleDateString('en-GB', { month: 'short' }).slice(0, 3)} ${d.getFullYear()}, ${pad(d.getHours())}:${pad(d.getMinutes())}`; }
+function exportCSV() {
+  if (!LOG.length) return toast('Nothing logged yet');
+  const q = v => v == null ? '' : /[",\n]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : String(v);
+  const rows = [CSV_HEAD.join(',')];
+  for (const wk of LOG) for (const e of wk.ex) e.sets.forEach((s, j) =>
+    rows.push([wk.title, hevyTime(wk.start), hevyTime(wk.end || wk.start), '', e.name, '', '', j, s.type === 'warmup' ? 'warmup' : 'normal', s.w, s.reps, '', s.secs, '', wk.id].map(q).join(',')));
+  const name = `onerepmaximus-log-${dayKey(new Date())}.csv`;
+  const file = new File([rows.join('\n') + '\n'], name, { type: 'text/csv' });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) return navigator.share({ files: [file], title: name }).catch(() => {});
+  const a = document.createElement('a'); a.href = URL.createObjectURL(file); a.download = name; document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+}
+/* A backup file made by exportCSV goes back into the log (merged by workout id). */
+function restoreCSV(text) {
+  const rows = parseCSV(text), head = rows[0].map(h => h.trim().toLowerCase()), c = n => head.indexOf(n);
+  const byId = new Map();
+  for (const r of rows.slice(1)) {
+    const id = r[c('orm_workout_id')]; if (!id) continue;
+    const st = parseDate(r[c('start_time')]), en = parseDate(r[c('end_time')]); if (!st) continue;
+    if (!byId.has(id)) byId.set(id, { id, title: r[c('title')] || 'Workout', start: st.toISOString(), end: (en || st).toISOString(), ex: [] });
+    const wk = byId.get(id), name = r[c('exercise_title')];
+    let e = wk.ex[wk.ex.length - 1]; if (!e || e.name !== name) { e = { name, sets: [] }; wk.ex.push(e); }
+    const num = v => v === '' || v == null || isNaN(parseFloat(v)) ? null : parseFloat(v);
+    e.sets.push({ w: num(r[c('weight_kg')]), reps: num(r[c('reps')]), secs: num(r[c('duration_seconds')]), type: r[c('set_type')] === 'warmup' ? 'warmup' : 'normal' });
+  }
+  for (const wk of byId.values()) { const i = LOG.findIndex(w => w.id === wk.id); if (i >= 0) LOG[i] = wk; else LOG.push(wk); }
+  LOG.sort((a, b) => a.start.localeCompare(b.start)); saveLog();
+  return byId.size;
+}
+
+/* Hevy history + logged workouts → one list of sets. A Hevy day that also has a logged workout is skipped (no double counting). */
+let hevySets = [];
+function logSets() {
+  return LOG.flatMap(wk => { const dt = new Date(wk.start);
+    return wk.ex.flatMap(e => e.sets.map((s, j) => ({ title: wk.title, dt, day: dayKey(dt), ex: e.name, type: s.type === 'warmup' ? 'warmup' : 'normal', w: s.w, reps: s.reps, idx: j }))); });
+}
+function rebuild() {
+  const mine = logSets(), days = new Set(mine.map(s => s.day));
+  A = analyse([...hevySets.filter(s => !days.has(s.day)), ...mine]);
 }
 
 
@@ -676,23 +892,26 @@ function pLegend() {
 /* ---------- Menu ---------- */
 function renderMenu() {
   const imp = store.get('lc_imported_at');
-  const impTxt = imp ? `Hevy CSV · last import ${new Date(imp).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}` : 'Hevy CSV export';
+  const impTxt = imp ? `Hevy history · last import ${new Date(imp).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}` : 'Optional: bring in your Hevy history';
   const seg = (key, opts, label) => `<div class="mseg" role="group" aria-label="${label}">${opts.map(([v, t]) => `<button type="button" data-set="${key}" data-val="${v}" aria-pressed="${S[key] === v}">${t}</button>`).join('')}</div>`;
   $('#drawer').innerHTML = `
     <div class="dhead"><b>Menu</b><button type="button" class="iconbtn" data-act="close" aria-label="Close menu"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
     <div class="dscroll">
+    <div class="grp">Workouts</div>
+    <button type="button" class="mitem" data-act="history"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/></svg><span style="flex:1"><span class="mt">Workout log</span><span class="ms">${LOG.length} logged here · edit or delete</span></span><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
+    <button type="button" class="mitem" data-act="export"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V4M7 9l5-5 5 5M5 20h14"/></svg><span><span class="mt">Back up log</span><span class="ms">Save a CSV. Import it to restore.</span></span></button>
     <div class="grp">Data</div>
-    <button type="button" class="mitem" data-act="import"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg><span><span class="mt">Import workouts</span><span class="ms">${esc(impTxt)}</span></span></button>
+    <button type="button" class="mitem" data-act="import"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg><span><span class="mt">Import CSV</span><span class="ms">${esc(impTxt)}</span></span></button>
     <button type="button" class="mitem" data-act="howto" aria-expanded="false"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></svg><span><span class="mt">How to export from Hevy</span><span class="ms">Profile › Settings › Export data</span></span></button>
     <ol class="howto" id="howto" hidden><li>In Hevy, open <b>Profile</b> → ⚙ <b>Settings</b>.</li><li>Tap <b>Export &amp; Import Data</b> → <b>Export Workouts</b>.</li><li>Share the file to <b>OneRepMaximus</b>, or save it and use <b>Import workouts</b>.</li></ol>
     <button type="button" class="mitem" data-act="chart"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M3 14h18M9 9v11"/></svg><span style="flex:1"><span class="mt">Prilepin chart</span><span class="ms">Zones, reps per set and how to read a tile</span></span><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
     <div class="grp">Training</div>
     <div class="mrowx"><div class="mt">Barbell lifts</div>${seg('style', [['rep', 'Rep targets'], ['prilepin', 'Prilepin']], 'Progression style for barbell lifts')}<div class="ms">Accessories always use rep targets.</div></div>
     <div class="mrowx"><div class="mt">Next session</div>${seg('next', [['rotation', 'In rotation'], ['weekday', 'By weekday']], 'How the next session is chosen')}
-      <div class="ms">${S.next === 'rotation' ? 'Follows your last workout. Name Hevy workouts Upper A, Lower A, Upper B, Lower B to keep it in step.' : 'Mon Upper A · Wed Lower A · Fri Upper B · Sun Lower B'}</div></div>
+      <div class="ms">${S.next === 'rotation' ? 'Follows your last workout. Workouts started here are named for you; name any Hevy ones Upper A, Lower A, Upper B, Lower B.' : 'Mon Upper A · Wed Lower A · Fri Upper B · Sun Lower B'}</div></div>
     <div class="mrowx"><div class="mt">Units</div>${seg('units', [['kg', 'kg'], ['lb', 'lb']], 'Weight units')}</div>
     </div>
-    <button type="button" class="mitem danger" data-act="clear"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg><span class="mt" id="clearLbl">Clear data on this phone</span></button>
+    <button type="button" class="mitem danger" data-act="clear"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg><span class="mt" id="clearLbl">Clear all data on this phone</span></button>
     <div class="dfoot">OneRepMaximus · your data stays on this phone</div>`;
 }
 
@@ -734,18 +953,26 @@ function renderChart() {
 function render() {
   const main = $('#main');
   $('#tabs').hidden = !A;
-  if (tab === 'chart') { main.innerHTML = renderChart(); $('#tabs').hidden = !A; document.querySelectorAll('#tabs [data-tab]').forEach(b => b.setAttribute('aria-selected', 'false')); return; }
-  if (!A) { main.innerHTML = emptyView(); $('#sub').textContent = 'No workouts imported yet'; return; }
-  $('#sub').textContent = `Last Workout: ${A.latest.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`;
-  main.innerHTML = tab === 'next' ? renderNext() : tab === 'lifts' ? renderLifts() : tab === 'balance' ? renderBalance() : tab === 'progress' ? renderProgress() : renderPlan();
+  if (tab === 'log' && !active) tab = 'next';
+  $('#sub').textContent = active && !active.editId ? 'Workout in progress' : A ? `Last Workout: ${A.latest.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}` : 'No workouts yet';
+  const side = { chart: renderChart, history: renderHistory, log: renderLog }[tab];
+  if (side) { main.innerHTML = side(); document.querySelectorAll('#tabs [data-tab]').forEach(b => b.setAttribute('aria-selected', 'false')); lgClock(); return; }
+  clearInterval(lgTick);
+  if (!A) { main.innerHTML = emptyView(); return; }
+  main.innerHTML = (active && tab !== 'next' ? startCard(PLAN[0]) : '') + (tab === 'next' ? renderNext() : tab === 'lifts' ? renderLifts() : tab === 'balance' ? renderBalance() : tab === 'progress' ? renderProgress() : renderPlan());
   document.querySelectorAll('#tabs [data-tab]').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === tab));
 }
 
 function load(text, quiet) {
   try {
-    A = analyse(text);
+    if (/(^|,)orm_workout_id(,|\r?\n|$)/.test(text.slice(0, 400))) {
+      const n = restoreCSV(text); rebuild(); render(); toast(`Restored ${n} logged workout${n === 1 ? '' : 's'}`); return true;
+    }
+    hevySets = parseHevy(text);
+    const n = new Set(hevySets.map(s => +s.dt)).size;
+    rebuild();
     if (!store.set('hevy_csv', text) && !quiet) toast('Imported, but this phone would not save it for next time.');
-    else if (!quiet) { store.set('lc_imported_at', new Date().toISOString()); toast(`Imported ${A.workouts} workouts`); }
+    else if (!quiet) { store.set('lc_imported_at', new Date().toISOString()); toast(`Imported ${n} Hevy workouts`); }
     render();
     return true;
   } catch (e) { toast(e.message || 'Could not read that file.'); return false; }
@@ -761,24 +988,34 @@ $('#drawer').addEventListener('click', e => {
   if (s) {
     const k = s.dataset.set, v = s.dataset.val; if (S[k] === v) return;
     S[k] = v; saveSettings();
-    if (k === 'units' && A) { const csv = store.get('hevy_csv'); if (csv) A = analyse(csv); }
+    if (k === 'units') rebuild();
     renderMenu(); render(); return;
   }
   const a = e.target.closest('[data-act]'); if (!a) return;
   const act = a.dataset.act;
   if (act === 'close') return openMenu(false);
-  if (act === 'chart') { if (tab !== 'chart') prevTab = tab; tab = 'chart'; openMenu(false); render(); window.scrollTo(0, 0); return; }
+  if (act === 'chart') { if (!['chart', 'history'].includes(tab)) prevTab = tab; tab = 'chart'; openMenu(false); render(); window.scrollTo(0, 0); return; }
   if (act === 'import') { openMenu(false); return $('#file').click(); }
+  if (act === 'history') { if (!['chart', 'history'].includes(tab)) prevTab = tab; tab = 'history'; openMenu(false); render(); window.scrollTo(0, 0); return; }
+  if (act === 'export') { openMenu(false); return exportCSV(); }
   if (act === 'howto') { const h = $('#howto'); h.hidden = !h.hidden; a.setAttribute('aria-expanded', String(!h.hidden)); return; }
   if (act === 'clear') {
-    if (Date.now() - clearArm > 4000) { clearArm = Date.now(); $('#clearLbl').textContent = 'Tap again to clear all data'; setTimeout(() => { const c = $('#clearLbl'); if (c) c.textContent = 'Clear data on this phone'; }, 4000); return; }
-    try { localStorage.removeItem('hevy_csv'); localStorage.removeItem('lc_imported_at'); } catch (err) { /* nothing stored */ }
-    A = null; clearArm = 0; openMenu(false); render(); toast('Workout data cleared from this phone');
+    if (Date.now() - clearArm > 4000) { clearArm = Date.now(); $('#clearLbl').textContent = 'Tap again: deletes logged workouts too'; setTimeout(() => { const c = $('#clearLbl'); if (c) c.textContent = 'Clear all data on this phone'; }, 4000); return; }
+    try { ['hevy_csv', 'lc_imported_at', 'orm_log', 'orm_active'].forEach(k => localStorage.removeItem(k)); } catch (err) { /* nothing stored */ }
+    A = null; LOG = []; active = null; hevySets = []; clearArm = 0; openMenu(false); render(); toast('Workout data cleared from this phone');
   }
 });
 $('#file').addEventListener('change', async e => { const f = e.target.files[0]; if (f) load(await f.text()); e.target.value = ''; });
 $('#main').addEventListener('click', e => {
   if (e.target.closest('[data-import]')) return $('#file').click();
+  const st = e.target.closest('[data-start]'); if (st) return startWorkout(st.dataset.start);
+  const lg = e.target.closest('[data-lg]'); if (lg) return lgAction(lg);
+  const ed = e.target.closest('[data-edit]'); if (ed) return editWorkout(ed.dataset.edit);
+  const dl = e.target.closest('[data-del]');
+  if (dl) {
+    if (dl.dataset.armed !== '1') { dl.dataset.armed = '1'; dl.textContent = 'Tap to confirm'; setTimeout(() => { dl.dataset.armed = ''; dl.textContent = 'Delete'; }, 3500); return; }
+    LOG = LOG.filter(w => w.id !== dl.dataset.del); saveLog(); rebuild(); render(); return toast('Workout deleted');
+  }
   if (e.target.closest('[data-back]')) { tab = prevTab; render(); window.scrollTo(0, 0); return; }
   const mu = e.target.closest('[data-muscle]'); if (mu) { progMuscle = mu.dataset.muscle; return render(); }
   const f = e.target.closest('[data-filter]'); if (f) { liftFilter = f.dataset.filter; return render(); }
@@ -787,6 +1024,16 @@ $('#main').addEventListener('click', e => {
   const l = e.target.closest('[data-lift]'); if (l) { openLift = openLift === l.dataset.lift ? null : l.dataset.lift; render(); }
 });
 $('#main').addEventListener('change', e => { if (e.target.id === 'liftSel') { progLift = e.target.value; render(); } });
+$('#main').addEventListener('input', e => {
+  const t = e.target;
+  if (t.id === 'lgTitle' && active) { active.title = t.value; return saveActive(); }
+  if (!t.dataset.f || !active) return;
+  const s = active.items[+t.dataset.i].sets[+t.dataset.j];
+  if (t.dataset.f === 'w') s.w = t.value.trim() === '' ? null : toKg(t.value);
+  else s.reps = t.value.replace(/[^0-9]/g, '');
+  saveActive();
+});
+$('#main').addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.id === 'lgAdd') { e.preventDefault(); lgAction({ dataset: { lg: 'addex' } }); } });
 let rsz; window.addEventListener('resize', () => { clearTimeout(rsz); rsz = setTimeout(() => { if (A && tab === 'progress') render(); }, 150); });
 $('#tabs').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (b) { tab = b.dataset.tab; render(); window.scrollTo(0, 0); } });
 
@@ -800,7 +1047,9 @@ $('#tabs').addEventListener('click', e => { const b = e.target.closest('[data-ta
     } catch (e) { /* fall through to saved data */ }
     history.replaceState(null, '', location.pathname);
   }
-  if (!A) { const saved = store.get('hevy_csv'); if (saved) load(saved, true); }
+  if (!hevySets.length) { const saved = store.get('hevy_csv'); if (saved) { try { hevySets = parseHevy(saved); } catch (e) { /* ignore */ } } }
+  rebuild();
+  if (active) tab = 'log';
   render();
   if ('serviceWorker' in navigator) {
     // When a new version takes over, reload once so it shows straight away.

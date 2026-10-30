@@ -1,7 +1,7 @@
 {
   "name": "OneRepMaximus",
   "short_name": "OneRepMaximus",
-  "description": "Move-up calls, muscle balance and a weekly plan from your Hevy workouts.",
+  "description": "Log your workouts, get move-up calls, muscle balance and a weekly plan.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
